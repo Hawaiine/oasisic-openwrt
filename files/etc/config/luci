@@ -1,0 +1,11 @@
+config core 'main'
+	option lang 'zh-cn'
+	option mediaurlbase '/luci-static/argon'
+
+config internal 'themes'
+	option Bootstrap '/luci-static/bootstrap'
+	option Argon '/luci-static/argon'
+
+config external 'title'
+	option title 'Oasisic OpenWrt'
+	option show_menu '0'

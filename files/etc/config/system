@@ -1,0 +1,15 @@
+config system
+	option hostname 'Oasisic OpenWrt'
+	option timezone 'CST-8'
+	option zonename 'Asia/Shanghai'
+	option log_proto 'udp'
+	option conloglevel '8'
+	option cronloglevel '8'
+
+config timeserver 'ntp'
+	option enabled '1'
+	option enable_server '0'
+	list server 'ntp.aliyun.com'
+	list server 'ntp.tencent.com'
+	list server 'cn.pool.ntp.org'
+	list server 'time1.cloud.tencent.com'

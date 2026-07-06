@@ -1,0 +1,52 @@
+#!/bin/sh
+# Oasisic OpenWrt — 首次启动配置
+# 在第一次启动时自动执行，然后自毁
+# 确保所有自定义配置生效
+
+# ---- 系统设置 ----
+uci set system.@system[0].hostname='Oasisic OpenWrt'
+uci set system.@system[0].timezone='CST-8'
+uci set system.@system[0].zonename='Asia/Shanghai'
+
+# ---- NTP 服务器 ----
+uci delete system.ntp.server >/dev/null 2>&1
+uci add_list system.ntp.server='ntp.aliyun.com'
+uci add_list system.ntp.server='ntp.tencent.com'
+uci add_list system.ntp.server='cn.pool.ntp.org'
+uci add_list system.ntp.server='time1.cloud.tencent.com'
+uci set system.ntp.enabled='1'
+
+# ---- 日志时区 ----
+uci set system.@system[0].cronloglevel='8'
+uci set system.@system[0].conloglevel='8'
+uci set system.@system[0].log_proto='udp'
+
+# ---- 应用系统配置 ----
+uci commit system
+/etc/init.d/system reload
+/etc/init.d/log restart
+/etc/init.d/sysntpd restart
+
+# ---- LuCI 语言 & 主题 ----
+uci set luci.main.lang='zh-cn'
+uci set luci.main.mediaurlbase='/luci-static/argon'
+uci commit luci
+
+# ---- Argon 主题名称 ----
+uci set argon.global.brand='Oasisic OpenWrt'
+uci set argon.global.hide_background='0'
+uci commit argon
+
+# ---- 将 root 密码设为空（安全：第一次登录后自行修改） ----
+# 如果 shadow 里已经配了密码，这步会覆盖，建议注释掉
+# passwd -d root >/dev/null 2>&1
+
+# ---- 确保 QEMU Guest Agent 启动 ----
+if [ -x /etc/init.d/qemu-ga ]; then
+    /etc/init.d/qemu-ga enable
+    /etc/init.d/qemu-ga start
+fi
+
+# ---- 清理自身 ----
+rm /etc/uci-defaults/99-custom
+exit 0

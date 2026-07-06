@@ -1,0 +1,213 @@
+# =============================================================================
+# OpenWrt Auto Build — 全量 SDK 编译版
+# 检测上游更新 → 全量源码编译（含 Nikki feeds）→ 发布 Release
+# =============================================================================
+name: openwrt-auto-build
+
+on:
+  schedule:
+    - cron: '0 6 * * *'    # 每天 UTC 06:00 / 北京时间 14:00 检测
+  workflow_dispatch:
+
+env:
+  OWRT_REPO: openwrt/openwrt
+  NIKKI_REPO: nikkinikki-org/OpenWrt-nikki
+  LAST_VERSION_FILE: last_build_version
+  BUILD_DIR: openwrt
+  CCACHE_DIR: /tmp/.ccache
+
+jobs:
+  # ─── Job 1: 检测上游 ─────────────────────────────────────────────────────
+  check-upstream:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      owrt_version: ${{ steps.check.outputs.owrt_version }}
+      owrt_ver_safe: ${{ steps.check.outputs.owrt_ver_safe }}
+      kernel_version: ${{ steps.check.outputs.kernel_version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 🔍 检测上游版本
+        id: check
+        run: |
+          SAVED=$(cat ${{ env.LAST_VERSION_FILE }} 2>/dev/null || echo "none")
+
+          OWRT_TAG=$(curl -sL "https://api.github.com/repos/${{ env.OWRT_REPO }}/releases/latest" \
+            | jq -r '.tag_name // empty')
+
+          NIKKI_TAG=$(curl -sL "https://api.github.com/repos/${{ env.NIKKI_REPO }}/releases/latest" \
+            | jq -r '.tag_name // empty')
+
+          KERNEL_VER=$(curl -sL "https://www.kernel.org/releases.json" \
+            | jq -r '[.releases[] | select(.moniker == "stable" or .moniker == "longterm") | .version][0] // empty')
+
+          echo "owrt_version=$OWRT_TAG" >> "$GITHUB_OUTPUT"
+          echo "kernel_version=$KERNEL_VER" >> "$GITHUB_OUTPUT"
+
+          # owrt_ver_safe: 去掉 v 前缀，用于路径
+          OWRT_SAFE="${OWRT_TAG#v}"
+          echo "owrt_ver_safe=$OWRT_SAFE" >> "$GITHUB_OUTPUT"
+
+          COMPOSITE="${OWRT_TAG}_${NIKKI_TAG}_${KERNEL_VER}"
+
+          if [ "$COMPOSITE" != "$SAVED" ] && [ -n "$OWRT_TAG" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "✅ 检测到更新: $COMPOSITE (上次: $SAVED)"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️  无更新,跳过构建"
+          fi
+
+  # ─── Job 2: 全量 SDK 编译 ──────────────────────────────────────────────
+  build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 📦 安装依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential libncurses5-dev libncursesw5-dev \
+            zlib1g-dev gawk git gettext wget unzip python3 \
+            file qemu-utils ccache
+
+      - name: 💾 恢复 ccache 缓存
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
+          restore-keys: |
+            ccache-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
+            ccache-openwrt-
+
+      - name: 💾 恢复源码树缓存
+        id: source-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}
+          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ github.run_id }}
+          restore-keys: |
+            source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
+
+      - name: 💾 恢复 dl 缓存
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/dl
+            ${{ env.BUILD_DIR }}/feeds
+          key: dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
+          restore-keys: |
+            dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
+            dl-openwrt-
+
+      - name: ⬇️ 克隆 OpenWrt 源码
+        if: steps.source-cache.outputs.cache-hit != 'true'
+        run: |
+          TAG="${{ needs.check-upstream.outputs.owrt_version }}"
+          git clone --depth 1 --branch "$TAG" \
+            https://github.com/${{ env.OWRT_REPO }}.git \
+            "${{ env.BUILD_DIR }}"
+
+      - name: ⚙️ 复制自定义文件
+        run: |
+          # files/ 目录放到源码根目录下，make 会自动包含
+          cp -r files/* "${{ env.BUILD_DIR }}/files/"
+
+      - name: ⚙️ 配置 feeds（含 nikki）
+        run: |
+          cp "${{ github.workspace }}/feeds.conf" "${{ env.BUILD_DIR }}/feeds.conf.default"
+          cd "${{ env.BUILD_DIR }}"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: ⚙️ 生成 .config
+        run: |
+          bash scripts/gen-config.sh "${{ env.BUILD_DIR }}"
+          cd "${{ env.BUILD_DIR }}"
+          make defconfig
+          echo "✅ defconfig 完成"
+
+      - name: ⬇️ 下载源码包
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          make download -j$(nproc) 2>&1 | tail -5
+          echo "✅ 源码包下载完成"
+
+      - name: 🏗️ 编译固件
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export PATH="/usr/lib/ccache:$PATH"
+          # 首次编译慢，后续 ccache 加速
+          make -j$(nproc) V=s 2>&1 | tail -30
+          echo "✅ 编译完成"
+
+      - name: 📋 展示编译产物
+        run: |
+          echo "=== 编译产物 ==="
+          find "${{ env.BUILD_DIR }}/bin/targets/" -name "*.gz" -o -name "*.iso" | sort
+          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.gz 2>/dev/null
+          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.iso 2>/dev/null
+
+      - name: 💾 保存版本标识
+        run: |
+          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.kernel_version }}" \
+            > "${{ env.LAST_VERSION_FILE }}"
+
+      - name: 📤 上传固件 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          path: |
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined-efi.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+          retention-days: 30
+
+      - name: 🚀 发布 Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          body: |
+            ## Oasisic OpenWrt 自动构建
+
+            | 项 | 值 |
+            |----|-----|
+            | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
+            | Linux 内核 | ${{ needs.check-upstream.outputs.kernel_version }} |
+            | 架构 | x86/64, EFI, squashfs |
+            | 编译方式 | **全量 SDK**（Nikki 从 feeds 编译） |
+            | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
+            | 主机名 | Oasisic OpenWrt |
+            | LAN IP | 10.10.10.252/24 |
+            | 网关 | 10.10.10.253 |
+
+            ### 📦 特性
+            - **代理**: Nikki (mihomo) — 从 feeds 源码编译
+            - **主题**: luci-theme-argon + argon-config
+            - **PVE**: qemu-ga + virtio 全系驱动
+            - **升级**: luci-app-attendedsysupgrade
+            - **统计**: luci-app-statistics + 硬件看板
+            - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
+            - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
+
+            ### ⚠️ 默认密码
+            `Oasisic@2025` — 首次登录后请修改
+
+            ### 📥 下载
+            - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
+            - `squashfs-combined.img.gz` — BIOS 启动
+            - `image.iso` — ISO 镜像
+          files: |
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined-efi.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+          fail_on_unmatched_files: false

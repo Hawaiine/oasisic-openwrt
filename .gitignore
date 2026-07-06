@@ -1,0 +1,8 @@
+# 忽略文件
+*.swp
+*.swo
+*~
+.DS_Store
+last_build_version
+openwrt-imagebuilder/
+packages/

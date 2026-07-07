@@ -262,6 +262,18 @@ jobs:
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
 
+      - name: 📢 Discord 通知（🖥️・固件发布）
+        if: success()
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
+          NIKKI_VER: ${{ needs.check-upstream.outputs.nikki_version }}
+          KERNEL_VER: ${{ needs.check-upstream.outputs.kernel_version }}
+          TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+        run: python3 scripts/notify-discord.py
+
       - name: 🧹 清理临时文件
         if: always()
         run: |

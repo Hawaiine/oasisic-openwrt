@@ -159,10 +159,12 @@ jobs:
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.img.gz 2>/dev/null || echo "(无)"
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.iso 2>/dev/null || echo "(无)"
           echo ""
-          echo "=== IPK 插件包 ==="
-          find "${{ env.BUILD_DIR }}/bin/packages/x86_64/" -name "*.ipk" 2>/dev/null | sort | head -30
-          IPK_COUNT=$(find "${{ env.BUILD_DIR }}/bin/packages/x86_64/" -name "*.ipk" 2>/dev/null | wc -l)
-          echo "共计: $IPK_COUNT 个 IPK"
+          echo "=== IPK 插件包（主题 + 插件 + Nikki）==="
+          for dir in luci nikki; do
+            COUNT=$(find "${{ env.BUILD_DIR }}/bin/packages/x86_64/$dir" -name "*.ipk" 2>/dev/null | wc -l)
+            echo "  $dir/: $COUNT 个 IPK"
+            find "${{ env.BUILD_DIR }}/bin/packages/x86_64/$dir" -name "*.ipk" 2>/dev/null | sort
+          done
           echo ""
           echo "=== feeds.conf.default ==="
           cat "${{ env.BUILD_DIR }}/feeds.conf.default" 2>/dev/null || echo "(无)"
@@ -185,7 +187,8 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
             ${{ env.BUILD_DIR }}/feeds.conf.default
-            ${{ env.BUILD_DIR }}/bin/packages/x86_64/**/*.ipk
+            ${{ env.BUILD_DIR }}/bin/packages/x86_64/luci/*.ipk
+            ${{ env.BUILD_DIR }}/bin/packages/x86_64/nikki/*.ipk
           retention-days: 30
 
       - name: 🚀 发布 Release

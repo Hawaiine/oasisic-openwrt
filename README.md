@@ -138,14 +138,9 @@ oasisic-openwrt/
 ├── 📄 sha256sums                     ← 固件校验和
 ├── 📄 feeds.conf.default             ← 编译使用的源列表
 │
-└── 📁 IPK 插件包 (可单独安装)
-    ├── base/   ← 基础包 (dnsmasq-full, zoneinfo-asia...)
-    ├── luci/   ← LuCI 界面 (luci-theme-argon, luci-app-nikki...)
-    ├── nikki/  ← Nikki 代理
-    ├── packages/  ← 工具包 (bash, curl, vim...)
-    ├── routing/  ← 路由包
-    ├── telephony/ ← 电话包
-    └── video/    ← 视频包
+└── 📁 IPK 插件包（主题 · 插件 · Nikki）
+    ├── luci/   ← 主题 + 插件（luci-theme-argon, luci-app-nikki, 翻译包...）
+    └── nikki/  ← Nikki 代理包（nikki, mihomo-meta）
 ```
 
 ---

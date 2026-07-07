@@ -72,7 +72,7 @@ check-upstream
         │    └── nikki ✅
         ├── ⚙️ make defconfig
         ├── ⬇️ make download
-        ├── 🏗️ make -j4 V=s            ← 核心编译 (1-4h)
+        ├── 🏗️ make -j4 V=s            ← 核心编译 (~77min)
         ├── 🧹 清理 build_dir         ← 省磁盘
         ├── 📋 展示产物清单
         ├── 💾 保存版本标识
@@ -153,7 +153,7 @@ cd oasisic-openwrt
 # 改 IP 地址 (默认 10.10.10.252)
 vim files/etc/config/network
 
-# 改 root 密码
+# 改 root 密码 (默认 Oasisic@2025)
 # Ubuntu: sudo apt install whois
 mkpasswd -m sha-512 '你的密码'
 # 把输出粘到 files/etc/shadow 的 root: 行
@@ -176,14 +176,14 @@ GitHub Actions 每天北京时间 14:00 自动检测。也可手动触发：**Ac
 
 ```bash
 # 从 Release 下载 squashfs-combined-efi.img.gz → 解压
-gunzip openwrt-*-squashfs-combined-efi.img.gz
+gunzip openwrt-x86-64-generic-squashfs-combined-efi.img.gz
 
 # PVE 创建 VM → 导入磁盘
 qm create 100 --name "Oasisic-OpenWrt" --ostype l26 \
   --machine q35 --bios ovmf --cores 2 --memory 1024 \
   --net0 virtio,bridge=vmbr0
 
-qm importdisk 100 openwrt-*-squashfs-combined-efi.img local-lvm
+qm importdisk 100 openwrt-x86-64-generic-squashfs-combined-efi.img local-lvm
 qm set 100 --scsihw virtio-scsi-single --scsi0 local-lvm:vm-100-disk-0
 qm set 100 --boot order=scsi0 --agent enabled=1
 qm start 100
@@ -200,7 +200,7 @@ qm start 100
 | 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` |
 | 🧬 包声明 | `gen-config.sh` 显式声明所有包，无隐藏依赖 |
 | 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁 |
-| 🔒 密码 | 预置 hash，首次登录后请修改 |
+| 🔒 密码 | 默认 `Oasisic@2025`，首次登录后请修改 |
 | 🚫 无后门 | 不包含任何第三方源、闭源驱动、遥测脚本 |
 
 ---
@@ -219,9 +219,9 @@ qm start 100
 
 ### 编译时间参考
 
-| 场景 | 首次 | 二次 (ccache+源码缓存) | 三次+ (全部命中) |
-|------|:----:|:--------------------:|:---------------:|
-| 全量 SDK | 2-4h | 30-60min | 30-60min |
+| 场景 | 首次 (cold) | 二次+ (ccache+缓存命中) |
+|------|:-----------:|:----------------------:|
+| 全量 SDK | ~77min | ~30-45min |
 
 ### 常见问题
 

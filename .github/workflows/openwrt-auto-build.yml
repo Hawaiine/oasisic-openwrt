@@ -29,6 +29,7 @@ jobs:
       owrt_version: ${{ steps.check.outputs.owrt_version }}
       owrt_ver_safe: ${{ steps.check.outputs.owrt_ver_safe }}
       kernel_version: ${{ steps.check.outputs.kernel_version }}
+      nikki_version: ${{ steps.check.outputs.nikki_version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -48,6 +49,7 @@ jobs:
 
           echo "owrt_version=$OWRT_TAG" >> "$GITHUB_OUTPUT"
           echo "kernel_version=$KERNEL_VER" >> "$GITHUB_OUTPUT"
+          echo "nikki_version=$NIKKI_TAG" >> "$GITHUB_OUTPUT"
 
           OWRT_SAFE="${OWRT_TAG#v}"
           echo "owrt_ver_safe=$OWRT_SAFE" >> "$GITHUB_OUTPUT"
@@ -200,25 +202,25 @@ jobs:
           make_latest: true
           generate_release_notes: false
           body: |
-            ## Oasisic OpenWrt 自动构建
+            ## 🏝️ Oasisic OpenWrt 自动构建
 
             | 项 | 值 |
             |----|-----|
             | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
+            | Nikki 版本 | ${{ needs.check-upstream.outputs.nikki_version }} |
             | Linux 内核 | ${{ needs.check-upstream.outputs.kernel_version }} |
             | 架构 | x86/64, EFI, squashfs |
             | 编译方式 | **全量 SDK**（Nikki 从 feeds 编译） |
             | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
             | 主机名 | Oasisic OpenWrt |
-            | LAN IP | 10.10.10.252/24 |
-            | 网关 | 10.10.10.253 |
+            | LAN IP | 10.10.10.252/24 | 网关 | 10.10.10.253 |
 
             ### 📦 预装组件
-            - **代理**: Nikki (mihomo) — 从 feeds 源码编译
-            - **主题**: luci-theme-argon + argon-config
+            - **代理**: Nikki + mihomo-meta ${{ needs.check-upstream.outputs.nikki_version }}
+            - **主题**: luci-theme-argon 2.x + argon-config
             - **PVE**: qemu-ga + virtio 全系驱动
             - **升级**: luci-app-attendedsysupgrade
-            - **统计**: luci-app-statistics + 硬件看板
+            - **统计**: luci-app-statistics
             - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
             - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
 
@@ -231,12 +233,9 @@ jobs:
             - `image.iso` — ISO 镜像
             - `feeds.conf.default` — 编译源列表
             - `sha256sums` — 固件校验和
-            - `*.ipk` — luci 主题/插件 + Nikki 代理包（可单独安装）
           files: |
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined-efi.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
             ${{ env.BUILD_DIR }}/feeds.conf.default
-            ${{ env.BUILD_DIR }}/bin/packages/x86_64/luci/*.ipk
-            ${{ env.BUILD_DIR }}/bin/packages/x86_64/nikki/*.ipk

@@ -49,7 +49,6 @@ jobs:
           echo "owrt_version=$OWRT_TAG" >> "$GITHUB_OUTPUT"
           echo "kernel_version=$KERNEL_VER" >> "$GITHUB_OUTPUT"
 
-          # owrt_ver_safe: 去掉 v 前缀，用于路径
           OWRT_SAFE="${OWRT_TAG#v}"
           echo "owrt_ver_safe=$OWRT_SAFE" >> "$GITHUB_OUTPUT"
 
@@ -93,7 +92,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.BUILD_DIR }}
-          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ github.run_id }}
+          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           restore-keys: |
             source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
 
@@ -118,7 +117,6 @@ jobs:
 
       - name: ⚙️ 复制自定义文件
         run: |
-          # files/ 目录放到源码根目录下，make 会自动包含
           cp -r files/* "${{ env.BUILD_DIR }}/files/"
 
       - name: ⚙️ 配置 feeds（含 nikki）
@@ -147,12 +145,30 @@ jobs:
           export PATH="/usr/lib/ccache:$PATH"
           make -j$(nproc) V=s
 
+      - name: 🧹 清理中间产物（省磁盘）
+        run: |
+          du -sh "${{ env.BUILD_DIR }}"
+          rm -rf "${{ env.BUILD_DIR }}/build_dir"
+          rm -rf "${{ env.BUILD_DIR }}/staging_dir/target-*"
+          du -sh "${{ env.BUILD_DIR }}"
+          echo "✅ 清理完成"
+
       - name: 📋 展示编译产物
         run: |
-          echo "=== 编译产物 ==="
-          find "${{ env.BUILD_DIR }}/bin/targets/" -type f \( -name "*.gz" -o -name "*.iso" -o -name "sha256sums" \) 2>/dev/null | sort || true
+          echo "=== 固件镜像 ==="
+          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.img.gz 2>/dev/null || echo "(无)"
+          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.iso 2>/dev/null || echo "(无)"
           echo ""
-          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/" 2>/dev/null || echo "⚠️  目录为空"
+          echo "=== IPK 插件包 ==="
+          find "${{ env.BUILD_DIR }}/bin/packages/x86_64/" -name "*.ipk" 2>/dev/null | sort | head -30
+          IPK_COUNT=$(find "${{ env.BUILD_DIR }}/bin/packages/x86_64/" -name "*.ipk" 2>/dev/null | wc -l)
+          echo "共计: $IPK_COUNT 个 IPK"
+          echo ""
+          echo "=== feeds.conf.default ==="
+          cat "${{ env.BUILD_DIR }}/feeds.conf.default" 2>/dev/null || echo "(无)"
+          echo ""
+          echo "=== sha256sums ==="
+          cat "${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums" 2>/dev/null || echo "(无)"
 
       - name: 💾 保存版本标识
         run: |
@@ -178,6 +194,9 @@ jobs:
         with:
           tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          fail_on_unmatched_files: false
+          make_latest: true
+          generate_release_notes: false
           body: |
             ## Oasisic OpenWrt 自动构建
 
@@ -192,7 +211,7 @@ jobs:
             | LAN IP | 10.10.10.252/24 |
             | 网关 | 10.10.10.253 |
 
-            ### 📦 特性
+            ### 📦 预装组件
             - **代理**: Nikki (mihomo) — 从 feeds 源码编译
             - **主题**: luci-theme-argon + argon-config
             - **PVE**: qemu-ga + virtio 全系驱动
@@ -208,10 +227,12 @@ jobs:
             - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
             - `squashfs-combined.img.gz` — BIOS 启动
             - `image.iso` — ISO 镜像
+            - `feeds.conf.default` — 编译源列表
+            - `sha256sums` — 固件校验和
+            - `*.ipk` — 编译好的插件包（可单独安装）
           files: |
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined-efi.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
             ${{ env.BUILD_DIR }}/feeds.conf.default
-          fail_on_unmatched_files: false

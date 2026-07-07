@@ -126,6 +126,8 @@ jobs:
         run: |
           cp "${{ github.workspace }}/feeds.conf" "${{ env.BUILD_DIR }}/feeds.conf.default"
           cd "${{ env.BUILD_DIR }}"
+          # 清理 feeds 中残留的 untracked 文件，避免 git pull 冲突
+          rm -rf feeds 2>/dev/null || true
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 

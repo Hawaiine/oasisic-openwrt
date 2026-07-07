@@ -13,12 +13,17 @@ permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   OWRT_REPO: openwrt/openwrt
   NIKKI_REPO: nikkinikki-org/OpenWrt-nikki
   LAST_VERSION_FILE: last_build_version
   BUILD_DIR: openwrt
   CCACHE_DIR: /tmp/.ccache
+  MAKE_JOBS: 4                        # 固定并行度防 OOM
 
 jobs:
   # ─── Job 1: 检测上游 ─────────────────────────────────────────────────────
@@ -141,14 +146,14 @@ jobs:
       - name: ⬇️ 下载源码包
         run: |
           cd "${{ env.BUILD_DIR }}"
-          make download -j$(nproc) V=s
+          make download -j${{ env.MAKE_JOBS }} V=s
 
       - name: 🏗️ 编译固件
         run: |
           cd "${{ env.BUILD_DIR }}"
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export PATH="/usr/lib/ccache:$PATH"
-          make -j$(nproc) V=s
+          make -j${{ env.MAKE_JOBS }} V=s
 
       - name: 🧹 清理中间产物（省磁盘）
         run: |
@@ -228,15 +233,15 @@ jobs:
           - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
           - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
 
-          ### ⚠️ 默认密码
-          `Oasisic@2025` — 首次登录后请修改
-
           ### 📥 下载
           - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
           - `squashfs-combined.img.gz` — BIOS 启动
           - `image.iso` — ISO 镜像
           - `feeds.conf.default` — 编译源列表
           - `sha256sums` — 固件校验和
+
+          ### 🔑 默认密码
+          首次登录后请立即修改密码。详情见 README。
           RELEASEEOF
 
       - name: 🚀 发布 Release
@@ -256,3 +261,9 @@ jobs:
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
+
+      - name: 🧹 清理临时文件
+        if: always()
+        run: |
+          rm -f release-body.md
+          rm -rf release-artifacts

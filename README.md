@@ -1,6 +1,6 @@
 # 🏝️ Oasisic OpenWrt
 
-> 自动构建 · 开箱即用 · 专为 PVE 虚拟化优化
+> 全自动 OpenWrt 固件构建 · 源码编译 Nikki · PVE 开箱即用
 
 [![build](https://github.com/Hawaiine/oasisic-openwrt/actions/workflows/openwrt-auto-build.yml/badge.svg)](https://github.com/Hawaiine/oasisic-openwrt/actions/workflows/openwrt-auto-build.yml)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.x-00b4ff?logo=openwrt)](https://openwrt.org)
@@ -15,22 +15,19 @@
 
 **Oasisic OpenWrt** 是一套全自动化的 OpenWrt 固件编译系统。每当上游更新时，自动检测并用 **全量 SDK** 编译出带 Nikki 代理、luci-theme-argon 主题、PVE 优化驱动、北京时间时区的专用固件。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    🏝️ Oasisic OpenWrt                  │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  📡 检测上游 → 🏗️ 全量编译 → 🚀 Release 发布          │
-│                                                         │
-│  触发源:                                                 │
-│  ├─ OpenWrt 稳定版更新  (api.github.com)                │
-│  ├─ Nikki 新版发布      (api.github.com)                │
-│  └─ Linux LTS 内核更新  (kernel.org/releases.json)      │
-│                                                         │
-│  ⏱ 首次: 2-4h · 后续: 30-60min (ccache + 3 层缓存)    │
-│  📦 产物: 固件镜像 + feeds.conf + sha256sums              │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+```text
+╔═══════════════════════════════════════════════╗
+║              🏝️ Oasisic OpenWrt               ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║  📡 检测上游 → 🏗️ 全量编译 → 🚀 Release     ║
+║                                               ║
+║  触发源: OpenWrt / Nikki / Linux LTS          ║
+║                                               ║
+║  ⏱  ~90min · 增量 ~30min (三层缓存)          ║
+║  📦  固件 · sha256sums · feeds.conf           ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
 ```
 
 ---
@@ -108,7 +105,7 @@ oasisic-openwrt/
 │       │   ├── system            ← CST-8 / 4 个 NTP
 │       │   ├── luci              ← zh-cn / argon
 │       │   └── argon-config      ← 品牌名
-│       ├── shadow                ← root 密码 (需自行设置)
+│       ├── shadow                ← root 默认密码 Oasisic@2025
 │       ├── uci-defaults/
 │       │   └── 99-custom         ← 首次启动脚本 → 自毁
 │       └── banner                ← SSH 欢迎画

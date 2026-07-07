@@ -193,6 +193,50 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/packages/x86_64/**/*.ipk
           retention-days: 30
 
+      - name: 📥 下载 Artifact（准备 Release 附件）
+        uses: actions/download-artifact@v7
+        with:
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          path: release-artifacts/
+
+      - name: 🏷️ 生成 Release body
+        run: |
+          cat > release-body.md << 'RELEASEEOF'
+          ## 🏝️ Oasisic OpenWrt 自动构建
+
+          | 项 | 值 |
+          |----|-----|
+          | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
+          | Nikki 版本 | ${{ needs.check-upstream.outputs.nikki_version }} |
+          | Linux 内核 | ${{ needs.check-upstream.outputs.kernel_version }} |
+          | 架构 | x86/64, EFI, squashfs |
+          | 编译方式 | **全量 SDK**（Nikki 从 feeds 编译） |
+          RELEASEEOF
+          echo "| 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |" >> release-body.md
+          cat >> release-body.md << 'RELEASEEOF'
+          | 主机名 | Oasisic OpenWrt |
+          | LAN IP | 10.10.10.252/24 | 网关 | 10.10.10.253 |
+
+          ### 📦 预装组件
+          - **代理**: Nikki + mihomo-meta ${{ needs.check-upstream.outputs.nikki_version }}
+          - **主题**: luci-theme-argon 2.x + argon-config
+          - **PVE**: qemu-ga + virtio 全系驱动
+          - **升级**: luci-app-attendedsysupgrade
+          - **统计**: luci-app-statistics
+          - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
+          - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
+
+          ### ⚠️ 默认密码
+          `Oasisic@2025` — 首次登录后请修改
+
+          ### 📥 下载
+          - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
+          - `squashfs-combined.img.gz` — BIOS 启动
+          - `image.iso` — ISO 镜像
+          - `feeds.conf.default` — 编译源列表
+          - `sha256sums` — 固件校验和
+          RELEASEEOF
+
       - name: 🚀 发布 Release
         uses: softprops/action-gh-release@v3
         if: github.ref == 'refs/heads/main'
@@ -202,41 +246,11 @@ jobs:
           fail_on_unmatched_files: false
           make_latest: true
           generate_release_notes: false
-          body: |
-            ## 🏝️ Oasisic OpenWrt 自动构建
-
-            | 项 | 值 |
-            |----|-----|
-            | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
-            | Nikki 版本 | ${{ needs.check-upstream.outputs.nikki_version }} |
-            | Linux 内核 | ${{ needs.check-upstream.outputs.kernel_version }} |
-            | 架构 | x86/64, EFI, squashfs |
-            | 编译方式 | **全量 SDK**（Nikki 从 feeds 编译） |
-            | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
-            | 主机名 | Oasisic OpenWrt |
-            | LAN IP | 10.10.10.252/24 | 网关 | 10.10.10.253 |
-
-            ### 📦 预装组件
-            - **代理**: Nikki + mihomo-meta ${{ needs.check-upstream.outputs.nikki_version }}
-            - **主题**: luci-theme-argon 2.x + argon-config
-            - **PVE**: qemu-ga + virtio 全系驱动
-            - **升级**: luci-app-attendedsysupgrade
-            - **统计**: luci-app-statistics
-            - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
-            - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
-
-            ### ⚠️ 默认密码
-            `Oasisic@2025` — 首次登录后请修改
-
-            ### 📥 下载
-            - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
-            - `squashfs-combined.img.gz` — BIOS 启动
-            - `image.iso` — ISO 镜像
-            - `feeds.conf.default` — 编译源列表
-            - `sha256sums` — 固件校验和
+          body_path: release-body.md
           files: |
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined-efi.img.gz
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
-            ${{ env.BUILD_DIR }}/feeds.conf.default
+            release-artifacts/sha256sums
+            release-artifacts/feeds.conf.default
+            release-artifacts/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+            release-artifacts/openwrt-x86-64-generic-squashfs-combined.img.gz
+            release-artifacts/openwrt-x86-64-generic-image.iso
+            release-artifacts/openwrt-x86-64-generic-image-efi.iso

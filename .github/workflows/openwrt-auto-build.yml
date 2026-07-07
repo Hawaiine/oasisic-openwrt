@@ -113,6 +113,7 @@ jobs:
         if: steps.source-cache.outputs.cache-hit != 'true'
         run: |
           TAG="${{ needs.check-upstream.outputs.owrt_version }}"
+          rm -rf "${{ env.BUILD_DIR }}"
           git clone --depth 1 --branch "$TAG" \
             https://github.com/${{ env.OWRT_REPO }}.git \
             "${{ env.BUILD_DIR }}"

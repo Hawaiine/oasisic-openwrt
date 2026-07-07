@@ -250,9 +250,9 @@ jobs:
           generate_release_notes: false
           body_path: release-body.md
           files: |
-            release-artifacts/sha256sums
+            release-artifacts/bin/targets/x86/64/sha256sums
             release-artifacts/feeds.conf.default
-            release-artifacts/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
-            release-artifacts/openwrt-x86-64-generic-squashfs-combined.img.gz
-            release-artifacts/openwrt-x86-64-generic-image.iso
-            release-artifacts/openwrt-x86-64-generic-image-efi.iso
+            release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+            release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
+            release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
+            release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso

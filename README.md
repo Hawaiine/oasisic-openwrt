@@ -75,7 +75,7 @@ check-upstream
         │    └── nikki ✅
         ├── ⚙️ make defconfig
         ├── ⬇️ make download
-        ├── 🏗️ make -j$(nproc) V=s   ← 核心编译 (1-4h)
+        ├── 🏗️ make -j4 V=s            ← 核心编译 (1-4h)
         ├── 🧹 清理 build_dir         ← 省磁盘
         ├── 📋 展示产物清单
         ├── 💾 保存版本标识
@@ -99,7 +99,7 @@ check-upstream
 oasisic-openwrt/
 │
 ├── .github/workflows/
-│   └── openwrt-auto-build.yml   ← CI/CD 全量编译工作流 (216 行)
+│   └── openwrt-auto-build.yml   ← CI/CD 全量编译工作流 (260+ 行)
 │
 ├── files/                        ← 注入固件的自定义文件
 │   └── etc/
@@ -108,7 +108,7 @@ oasisic-openwrt/
 │       │   ├── system            ← CST-8 / 4 个 NTP
 │       │   ├── luci              ← zh-cn / argon
 │       │   └── argon-config      ← 品牌名
-│       ├── shadow                ← root 密码 (Oasisic@2025)
+│       ├── shadow                ← root 密码 (需自行设置)
 │       ├── uci-defaults/
 │       │   └── 99-custom         ← 首次启动脚本 → 自毁
 │       └── banner                ← SSH 欢迎画
@@ -130,9 +130,10 @@ oasisic-openwrt/
 📦 oasisic-openwrt-25.12.5 Release
 │
 ├── 📄 固件镜像
-│   ├── openwrt-25.12.5-x86-64-generic-squashfs-combined-efi.img.gz   ← PVE EFI 启动
-│   ├── openwrt-25.12.5-x86-64-generic-squashfs-combined.img.gz       ← BIOS 启动
-│   └── openwrt-25.12.5-x86-64-generic-image.iso                      ← ISO 镜像
+│   ├── openwrt-x86-64-generic-squashfs-combined-efi.img.gz   ← PVE EFI 启动 (推荐)
+│   ├── openwrt-x86-64-generic-squashfs-combined.img.gz       ← BIOS 启动
+│   ├── openwrt-x86-64-generic-image-efi.iso                  ← EFI ISO
+│   └── openwrt-x86-64-generic-image.iso                      ← BIOS ISO
 │
 ├── 📄 sha256sums                     ← 固件校验和
 └── 📄 feeds.conf.default             ← 编译使用的源列表
@@ -155,7 +156,7 @@ cd oasisic-openwrt
 # 改 IP 地址 (默认 10.10.10.252)
 vim files/etc/config/network
 
-# 改 root 密码 (默认 Oasisic@2025)
+# 改 root 密码
 # Ubuntu: sudo apt install whois
 mkpasswd -m sha-512 '你的密码'
 # 把输出粘到 files/etc/shadow 的 root: 行
@@ -202,7 +203,7 @@ qm start 100
 | 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` |
 | 🧬 包声明 | `gen-config.sh` 显式声明所有包，无隐藏依赖 |
 | 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁 |
-| 🔒 密码 | 默认 `Oasisic@2025`，首次登录后请修改 |
+| 🔒 密码 | 预置 hash，首次登录后请修改 |
 | 🚫 无后门 | 不包含任何第三方源、闭源驱动、遥测脚本 |
 
 ---
@@ -215,7 +216,7 @@ qm start 100
 |------|------|------|
 | `make download` 失败 | 缺少 `mkisofs` | 确保 workflow 安装 `genisoimage` |
 | Release 失败 `Resource not accessible` | 缺少 `contents: write` 权限 | 在 workflow 添加 `permissions: contents: write` |
-| `make` 只跑了几秒 | `2>&1 \| tail -30` 管道导致 make 提前退出 | 移除 `\| tail`，直接 `make -j\$(nproc) V=s` |
+| `make` 只跑了几秒 | `2>&1 | tail -30` 管道截断 | 移除 `| tail`，直接 `make -j4 V=s` |
 | 缓存不命中 | `run_id` 导致 key 每次都变 | 用版本号代替 `run_id` |
 | Node.js 20 deprecation | action 版本太旧 | 升级到 `cache@v5`, `upload-artifact@v7`, `action-gh-release@v3` |
 

@@ -9,6 +9,10 @@ on:
     - cron: '0 6 * * *'    # 每天 UTC 06:00 / 北京时间 14:00 检测
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: read
+
 env:
   OWRT_REPO: openwrt/openwrt
   NIKKI_REPO: nikkinikki-org/OpenWrt-nikki
@@ -146,7 +150,7 @@ jobs:
       - name: 📋 展示编译产物
         run: |
           echo "=== 编译产物 ==="
-          find "${{ env.BUILD_DIR }}/bin/targets/" -type f -name "*.gz" -o -name "*.iso" 2>/dev/null | sort || true
+          find "${{ env.BUILD_DIR }}/bin/targets/" -type f \( -name "*.gz" -o -name "*.iso" -o -name "sha256sums" \) 2>/dev/null | sort || true
           echo ""
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/" 2>/dev/null || echo "⚠️  目录为空"
 

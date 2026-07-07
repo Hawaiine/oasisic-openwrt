@@ -73,7 +73,7 @@ jobs:
           sudo apt-get install -y -qq \
             build-essential libncurses5-dev libncursesw5-dev \
             zlib1g-dev gawk git gettext wget unzip python3 \
-            file qemu-utils ccache
+            file qemu-utils ccache genisoimage
 
       - name: 💾 恢复 ccache 缓存
         uses: actions/cache@v4

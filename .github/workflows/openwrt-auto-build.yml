@@ -80,7 +80,7 @@ jobs:
             file qemu-utils ccache genisoimage
 
       - name: 💾 恢复 ccache 缓存
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
@@ -90,7 +90,7 @@ jobs:
 
       - name: 💾 恢复源码树缓存
         id: source-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.BUILD_DIR }}
           key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ github.run_id }}
@@ -98,7 +98,7 @@ jobs:
             source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
 
       - name: 💾 恢复 dl 缓存
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ${{ env.BUILD_DIR }}/dl
@@ -160,7 +160,7 @@ jobs:
             > "${{ env.LAST_VERSION_FILE }}"
 
       - name: 📤 上传固件 Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           path: |
@@ -168,10 +168,12 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+            ${{ env.BUILD_DIR }}/feeds.conf.default
+            ${{ env.BUILD_DIR }}/bin/packages/x86_64/**/*.ipk
           retention-days: 30
 
       - name: 🚀 发布 Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
@@ -211,4 +213,5 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-squashfs-combined.img.gz
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-*-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+            ${{ env.BUILD_DIR }}/feeds.conf.default
           fail_on_unmatched_files: false

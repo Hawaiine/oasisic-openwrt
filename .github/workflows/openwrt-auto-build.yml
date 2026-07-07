@@ -134,24 +134,21 @@ jobs:
       - name: ⬇️ 下载源码包
         run: |
           cd "${{ env.BUILD_DIR }}"
-          make download -j$(nproc) 2>&1 | tail -5
-          echo "✅ 源码包下载完成"
+          make download -j$(nproc) V=s
 
       - name: 🏗️ 编译固件
         run: |
           cd "${{ env.BUILD_DIR }}"
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export PATH="/usr/lib/ccache:$PATH"
-          # 首次编译慢，后续 ccache 加速
-          make -j$(nproc) V=s 2>&1 | tail -30
-          echo "✅ 编译完成"
+          make -j$(nproc) V=s
 
       - name: 📋 展示编译产物
         run: |
           echo "=== 编译产物 ==="
-          find "${{ env.BUILD_DIR }}/bin/targets/" -name "*.gz" -o -name "*.iso" | sort
-          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.gz 2>/dev/null
-          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.iso 2>/dev/null
+          find "${{ env.BUILD_DIR }}/bin/targets/" -type f -name "*.gz" -o -name "*.iso" 2>/dev/null | sort || true
+          echo ""
+          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/" 2>/dev/null || echo "⚠️  目录为空"
 
       - name: 💾 保存版本标识
         run: |

@@ -94,7 +94,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.BUILD_DIR }}
-          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
           restore-keys: |
             source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
 
@@ -176,7 +176,7 @@ jobs:
 
       - name: 💾 保存版本标识
         run: |
-          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.kernel_version }}" \
+          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ needs.check-upstream.outputs.kernel_version }}" \
             > "${{ env.LAST_VERSION_FILE }}"
 
       - name: 📤 上传固件 Artifact

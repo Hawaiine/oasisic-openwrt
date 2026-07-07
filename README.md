@@ -28,7 +28,7 @@
 │  └─ Linux LTS 内核更新  (kernel.org/releases.json)      │
 │                                                         │
 │  ⏱ 首次: 2-4h · 后续: 30-60min (ccache + 3 层缓存)    │
-│  📦 产物: 固件镜像 + feeds.conf + sha256sums + IPK 包   │
+│  📦 产物: 固件镜像 + feeds.conf + sha256sums              │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -65,7 +65,7 @@ check-upstream
         │
         ├── 📦 安装依赖 (build-essential, gawk, ccache, genisoimage...)
         ├── 💾 恢复 ccache 缓存       ← key: ccache-openwrt-{ver}-{config_hash}
-        ├── 💾 恢复源码树缓存          ← key: source-openwrt-{ver}
+        ├── 💾 恢复源码树缓存          ← key: source-openwrt-{ver}-{config_hash}
         ├── 💾 恢复 dl 缓存           ← key: dl-openwrt-{ver}-{config_hash}
         │
         ├── ⬇️ 克隆 OpenWrt 源码      ← 缓存未命中时执行
@@ -88,7 +88,7 @@ check-upstream
 | 缓存 | 缓存路径 | Key 策略 | 命中后效果 |
 |------|----------|----------|-----------|
 | 🔧 ccache | `/tmp/.ccache` | `ccache-openwrt-{ver}-{config_hash}` | 减少重复编译 ~60% |
-| 📦 源码树 | `openwrt/` | `source-openwrt-{ver}` | 跳过 git clone (1GB+) |
+| 📦 源码树 | `openwrt/` | `source-openwrt-{ver}-{config_hash}` | 跳过 git clone (1GB+) |
 | 📥 dl 包 | `openwrt/dl/` + `feeds/` | `dl-openwrt-{ver}-{config_hash}` | 跳过下载 (数百 MB) |
 
 ---
@@ -117,7 +117,6 @@ oasisic-openwrt/
 │   └── gen-config.sh             ← 生成 .config (184 行包配置)
 │
 ├── feeds.conf                    ← 源码源（含 nikki）
-├── config.buildinfo              ← .config 参考
 └── last_build_version            ← CI 版本缓存
 ```
 
@@ -136,11 +135,7 @@ oasisic-openwrt/
 │   └── openwrt-25.12.5-x86-64-generic-image.iso                      ← ISO 镜像
 │
 ├── 📄 sha256sums                     ← 固件校验和
-├── 📄 feeds.conf.default             ← 编译使用的源列表
-│
-└── 📁 IPK 插件包（主题 · 插件 · Nikki）
-    ├── luci/   ← 主题 + 插件（luci-theme-argon, luci-app-nikki, 翻译包...）
-    └── nikki/  ← Nikki 代理包（nikki, mihomo-meta）
+└── 📄 feeds.conf.default             ← 编译使用的源列表
 ```
 
 ---
@@ -242,7 +237,7 @@ A: 在 `scripts/gen-config.sh` 对应分类下加 `CONFIG_PACKAGE_xxx=y`。
 A: 确认 PVE 网桥模式：VM 要用 `virtio` 网卡，并确认 `files/etc/config/network` 里的 `device` 名称匹配。
 
 **Q: IPK 包怎么单独安装？**
-A: Release 下载的 IPK 包直接 `opkg install *.ipk` 即可，无需重新编译整套固件。
+A: IPK 包在 Actions 构建 Artifact 中可下载，解压后 `opkg install *.ipk` 即可，无需重新编译整套固件。
 
 ---
 

@@ -3,6 +3,10 @@
 *.swo
 *~
 .DS_Store
+*.bak
+.config.old
+.config.orig
 last_build_version
 openwrt-imagebuilder/
+openwrt/
 packages/

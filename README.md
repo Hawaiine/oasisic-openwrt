@@ -3,11 +3,11 @@
 > 全自动 OpenWrt 固件构建 · 源码编译 Nikki · PVE 开箱即用
 
 [![build](https://github.com/Hawaiine/oasisic-openwrt/actions/workflows/openwrt-auto-build.yml/badge.svg)](https://github.com/Hawaiine/oasisic-openwrt/actions/workflows/openwrt-auto-build.yml)
-[![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.x-00b4ff?logo=openwrt)](https://openwrt.org)
-[![Nikki](https://img.shields.io/badge/Nikki-latest-ff6600)](https://github.com/nikkinikki-org/OpenWrt-nikki)
+[![OpenWrt](https://img.shields.io/github/v/release/openwrt/openwrt?logo=openwrt&label=OpenWrt&color=00b4ff)](https://openwrt.org)
+[![Nikki](https://img.shields.io/github/v/release/nikkinikki-org/OpenWrt-nikki?logo=go&label=Nikki&color=ff6600)](https://github.com/nikkinikki-org/OpenWrt-nikki)
 [![PVE](https://img.shields.io/badge/PVE-9.x+-570c2e?logo=proxmox)](https://proxmox.com)
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-x86__64-ff69b4)](https://downloads.openwrt.org/releases/25.12.5/targets/x86/64/)
+[![Platform](https://img.shields.io/badge/x86__64-squashfs-ff69b4)](https://downloads.openwrt.org/releases/targets/x86/64/)
 
 ---
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+# check-firstboot CGI — 返回首次启动状态
+# 输出 JSON: {"firstboot": true} 或 {"firstboot": false}
+echo 'Content-Type: application/json'
+echo ''
+
+if [ -f /etc/.oasisic-firstboot ]; then
+    echo '{"firstboot":true}'
+else
+    echo '{"firstboot":false}'
+fi

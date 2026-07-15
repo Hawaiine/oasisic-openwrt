@@ -104,9 +104,17 @@ check-upstream
         ├── 📊 ccache 统计
         ├── 🔏 minisign 签名
         ├── 📋 check-firmware.sh 自检
-        ├── 📤 上传 Artifact
-        ├── 🚀 发布 Release（含随机密码）
-        └── 📢 Discord 通知
+        └── 📤 上传 Artifact
+              │
+              ▼
+        qemu-smoke-test（阻断门）
+              │
+              ├── ❌ QEMU 启动失败 → 终止
+              │
+              └── ✅ LuCI 响应 200 → release job
+                    │
+                    ├── 🚀 发布 GitHub Release（含随机密码）
+                    └── 📢 Discord 通知
 ```
 
 ### 三层缓存策略

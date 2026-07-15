@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oasisic OpenWrt · 设置向导</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f4f6f9;
+  color: #333;
+  display: flex;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ===== 左侧导航（深色方案） ===== */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #141522;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px;
+}
+.sidebar-logo {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  margin-bottom: 40px;
+  letter-spacing: 0.3px;
+}
+.sidebar-logo svg { vertical-align: middle; margin-right: 8px; }
+.sidebar-logo span { color: #0984e3; }
+.step-list { flex: 1; }
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 4px;
+  cursor: default;
+  transition: all 0.2s;
+  color: #5a6380;
+  font-size: 14px;
+}
+.step-item.active { background: rgba(9,132,227,0.12); color: #fff; }
+.step-item.done { color: #64d888; }
+.step-number {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+  background: rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.step-item.active .step-number { background: #0984e3; color: #fff; }
+.step-item.done .step-number { background: #1db954; color: #fff; }
+.step-label { font-size: 12px; }
+.step-label small { display: block; color: #5a6380; font-size: 11px; margin-top: 2px; }
+.sidebar-footer {
+  font-size: 12px;
+  color: #3a4466;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ===== 主内容区（浅色） ===== */
+.main {
+  flex: 1;
+  display: flex;
+  padding: 48px;
+  gap: 40px;
+  overflow-y: auto;
+  min-width: 0;
+  align-items: flex-start;
+}
+.form-area {
+  flex: 1;
+  max-width: 600px;
+  min-width: 0;
+}
+.form-area h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+}
+.form-area .subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+/* ===== 进度点（上方） ===== */
+.progress-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.progress-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: all 0.3s;
+}
+.progress-dot.active { background: #0984e3; width: 28px; border-radius: 5px; }
+.progress-dot.done { background: #1db954; }
+.progress-line {
+  width: 32px; height: 2px;
+  background: #ddd;
+}
+.progress-line.done { background: #1db954; }
+
+/* ===== 表单控件（浅色风格） ===== */
+.form-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.form-group { margin-bottom: 20px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+  margin-bottom: 6px;
+}
+.form-group label .required { color: #e74c3c; margin-left: 2px; }
+.form-group input {
+  width: 100%;
+  padding: 10px 14px;
+  background: #f8f9fb;
+  border: 1px solid #e0e2e6;
+  border-radius: 8px;
+  color: #333;
+  font-size: 14px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.form-group input:focus { border-color: #0984e3; box-shadow: 0 0 0 3px rgba(9,132,227,0.12); }
+.form-group input.error { border-color: #e74c3c; box-shadow: 0 0 0 3px rgba(231,76,60,0.1); }
+.form-group input::placeholder { color: #aaa; font-style: italic; font-family: inherit; }
+.form-hint {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.error-msg {
+  font-size: 12px;
+  color: #e74c3c;
+  margin-top: 4px;
+  display: none;
+  line-height: 1.4;
+}
+.error-msg.show { display: block; }
+.form-row { display: flex; gap: 16px; }
+.form-row .form-group { flex: 1; }
+
+/* ===== 右侧预览卡片（深色大色块） ===== */
+.preview-card {
+  width: 340px;
+  min-width: 300px;
+  background: linear-gradient(145deg, #141522 0%, #1e2040 100%);
+  border-radius: 16px;
+  padding: 32px 24px;
+  border: 1px solid rgba(255,255,255,0.08);
+  align-self: flex-start;
+  position: sticky;
+  top: 48px;
+  overflow: hidden;
+}
+.preview-role {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0984e3;
+  background: rgba(9,132,227,0.1);
+  padding: 4px 16px;
+  border-radius: 20px;
+  display: table;
+  margin: 0 auto 24px;
+}
+/* SVG 网络拓扑图 */
+.preview-topo {
+  margin: 0 auto 24px;
+  text-align: center;
+}
+.preview-topo svg {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+.preview-info { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
+.preview-item { padding: 14px 18px; line-height: 1.4; background: rgba(255,255,255,0.02); }
+.preview-item:nth-child(1) { border-bottom: 1px solid rgba(255,255,255,0.06); border-right: 1px solid rgba(255,255,255,0.06); }
+.preview-item:nth-child(2) { border-bottom: 1px solid rgba(255,255,255,0.06); }
+.preview-item:nth-child(3) { border-right: 1px solid rgba(255,255,255,0.06); }
+.preview-label { font-size: 11px; color: #5a6380; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.preview-value {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 13px; color: #e0e6f0; word-break: break-all;
+}
+.preview-value.dim { color: #5a6380; font-style: italic; font-family: inherit; }
+.preview-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 20px 0; }
+.preview-footer { font-size: 11px; color: #3a4466; text-align: center; }
+
+/* ===== 按钮 ===== */
+.actions { display: flex; gap: 12px; margin-top: 28px; align-items: center; justify-content: flex-end; }
+.btn {
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-primary { background: #0984e3; color: #fff; }
+.btn-primary:hover { background: #0773c5; }
+.btn-primary:disabled { background: #b0c4de; color: #fff; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: #888; }
+.btn-ghost:hover { color: #333; }
+.btn-success { background: #1db954; color: #fff; }
+.btn-success:hover { background: #17a44b; }
+.btn-success:disabled { background: #a8d8b8; color: #fff; cursor: not-allowed; }
+
+/* ===== 完成页 ===== */
+.step3-content { text-align: center; padding: 40px 20px; }
+.check-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: rgba(29,185,84,0.1);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px;
+}
+.check-icon svg { width: 36px; height: 36px; }
+.step3-content h2 { font-size: 22px; color: #1a1a2e; margin-bottom: 8px; }
+.step3-content p { color: #666; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+.config-summary {
+  background: #f8f9fb;
+  border-radius: 10px;
+  padding: 20px 24px;
+  text-align: left;
+  margin-bottom: 28px;
+  border: 1px solid #e0e2e6;
+}
+.config-summary table { width: 100%; border-collapse: collapse; }
+.config-summary td { padding: 8px 0; font-size: 13px; }
+.config-summary td:first-child { color: #888; width: 100px; }
+.config-summary td:last-child { color: #333; font-family: "SF Mono", "Fira Code", "Consolas", monospace; }
+
+/* ===== 密码强度 ===== */
+.pw-strength { margin-top: 6px; display: flex; gap: 4px; }
+.pw-bar { height: 3px; flex: 1; border-radius: 2px; background: #e0e2e6; transition: background 0.2s; }
+.pw-bar.active.d { background: #e74c3c; }
+.pw-bar.active.c { background: #e67e22; }
+.pw-bar.active.b { background: #f1c40f; }
+.pw-bar.active.a { background: #1db954; }
+.pw-text { font-size: 11px; color: #888; margin-top: 4px; }
+
+/* ===== 步骤面板控制 ===== */
+.step-panel { display: none; }
+.step-panel.active { display: block; }
+
+/* ===== 加载覆盖 ===== */
+.loading-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.loading-overlay.show { display: flex; }
+.loading-box {
+  background: #fff; border-radius: 16px; padding: 40px; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.loading-box .sp { width: 44px; height: 44px; border: 3px solid #e0e2e6; border-top: 3px solid #0984e3; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-box p { color: #666; font-size: 14px; }
+
+/* ===== 错误弹窗 ===== */
+.error-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 101;
+  align-items: center; justify-content: center;
+}
+.error-overlay.show { display: flex; }
+.error-box { background: #fff; border-radius: 16px; padding: 32px; max-width: 400px; text-align: center; border: 1px solid #e74c3c; }
+.error-box h3 { color: #e74c3c; margin-bottom: 8px; }
+.error-box p { color: #666; font-size: 13px; margin-bottom: 20px; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 960px) {
+  .sidebar { width: 60px; min-width: 60px; padding: 24px 12px; }
+  .sidebar-logo svg { margin-right: 0; }
+  .sidebar-logo span { display: none; }
+  .step-label { display: none; }
+  .sidebar-footer { display: none; }
+  .main { flex-direction: column; padding: 24px; }
+  .preview-card { width: 100%; position: static; }
+  .form-row { flex-direction: column; gap: 0; }
+}
+</style>
+</head>
+<body>
+<!-- 左侧导航（深色） -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin-right:8px;">
+      <path d="M4 16L8 8L12 14L16 4L20 12" stroke="#0984e3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="4" cy="16" r="1.5" fill="#0984e3"/>
+      <circle cx="8" cy="8" r="1.5" fill="#0984e3"/>
+      <circle cx="12" cy="14" r="1.5" fill="#0984e3"/>
+      <circle cx="16" cy="4" r="1.5" fill="#0984e3"/>
+      <circle cx="20" cy="12" r="1.5" fill="#0984e3"/>
+    </svg>
+    <span>O</span>asisic OpenWrt
+  </div>
+  <div class="step-list">
+    <div class="step-item active" data-step="1">
+      <div class="step-number">1</div>
+      <div class="step-label">网络设置<small>LAN IP · 网关 · DNS</small></div>
+    </div>
+    <div class="step-item" data-step="2">
+      <div class="step-number">2</div>
+      <div class="step-label">管理员密码<small>设置登录密码</small></div>
+    </div>
+    <div class="step-item" data-step="3">
+      <div class="step-number">3</div>
+      <div class="step-label">确认完成<small>应用并重启</small></div>
+    </div>
+  </div>
+  <div class="sidebar-footer">OpenWrt <span id="verDisplay">@OWRT_VERSION@</span></div>
+</div>
+
+<!-- 主内容区（浅色） -->
+<div class="main">
+  <div class="form-area">
+    <!-- 进度点 -->
+    <div class="progress-dots" id="progressDots">
+      <div class="progress-dot active" data-step="1"></div>
+      <div class="progress-line" data-between="1"></div>
+      <div class="progress-dot" data-step="2"></div>
+      <div class="progress-line" data-between="2"></div>
+      <div class="progress-dot" data-step="3"></div>
+    </div>
+
+    <!-- ===== Step 1: 网络设置 ===== -->
+    <div class="step-panel active" id="step1">
+      <h1>欢迎使用 Oasisic OpenWrt</h1>
+      <p class="subtitle">配置局域网参数即可开始使用，修改后设备将自动重启。</p>
+      <div class="form-card">
+        <div class="form-group">
+          <label>LAN IP 地址 <span class="required">*</span></label>
+          <input type="text" id="lanIp" placeholder="例如 10.10.10.252" value="">
+          <div class="form-hint">管理地址，修改后请用新地址访问</div>
+          <div class="error-msg" id="lanIpErr">请输入有效的 IPv4 地址</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>管理端口 <span class="required">*</span></label>
+            <input type="text" id="port" placeholder="80" value="80">
+            <div class="form-hint">默认 80（HTTP）</div>
+            <div class="error-msg" id="portErr">请输入 1–65535 之间的端口号</div>
+          </div>
+          <div class="form-group">
+            <label>子网掩码 <span class="required">*</span></label>
+            <input type="text" id="mask" placeholder="255.255.255.0" value="255.255.255.0">
+            <div class="error-msg" id="maskErr">请输入合法的子网掩码</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>默认网关 <span class="required">*</span></label>
+          <input type="text" id="gw" placeholder="例如 10.10.10.253" value="">
+          <div class="error-msg" id="gwErr">请输入有效的 IPv4 地址</div>
+          <div class="error-msg" id="gwWarn" style="color:#e67e22;">⚠️ 网关与 LAN IP 不在同一子网，旁路由场景可忽略</div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>首选 DNS</label>
+            <input type="text" id="dns1" placeholder="可选，留空自动" value="">
+            <div class="error-msg" id="dns1Err">请输入有效的 IPv4 地址或留空</div>
+          </div>
+          <div class="form-group">
+            <label>备用 DNS</label>
+            <input type="text" id="dns2" placeholder="可选，留空自动" value="">
+            <div class="error-msg" id="dns2Err">请输入有效的 IPv4 地址或留空</div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" onclick="skipWizard()">跳过</button>
+        <button class="btn btn-primary" id="step1Next" onclick="goStep(2)" disabled>下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ===== Step 2: 管理员密码 ===== -->
+    <div class="step-panel" id="step2">
+      <h1>设置管理员密码</h1>
+      <p class="subtitle">为设备设置一个安全的登录密码。编译时生成的临时密码在设置后将自动失效。</p>
+      <div class="form-card">
+        <div class="form-group">
+          <label>管理员密码 <span class="required">*</span></label>
+          <input type="password" id="password" placeholder="至少 8 位字符" autocomplete="new-password">
+          <div class="pw-strength" id="pwStrength">
+            <div class="pw-bar" data-level="1"></div>
+            <div class="pw-bar" data-level="2"></div>
+            <div class="pw-bar" data-level="3"></div>
+            <div class="pw-bar" data-level="4"></div>
+          </div>
+          <div class="pw-text" id="pwText">请输入密码</div>
+          <div class="error-msg" id="pwErr">密码至少需要 8 位字符</div>
+        </div>
+        <div class="form-group">
+          <label>确认密码 <span class="required">*</span></label>
+          <input type="password" id="pwConfirm" placeholder="再次输入密码" autocomplete="new-password">
+          <div class="error-msg" id="pwConfirmErr">两次输入的密码不一致</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" onclick="goStep(1)">← 返回</button>
+        <button class="btn btn-primary" id="step2Next" onclick="goStep(3)" disabled>下一步 →</button>
+      </div>
+    </div>
+
+    <!-- ===== Step 3: 确认完成 ===== -->
+    <div class="step-panel" id="step3">
+      <div class="step3-content">
+        <div class="check-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1db954" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <h2>确认配置</h2>
+        <p>请核对以下配置信息，确认无误后点击「应用并完成」。</p>
+        <div class="config-summary">
+          <table>
+            <tr><td>LAN IP</td><td id="cIp">—</td></tr>
+            <tr><td>管理端口</td><td id="cPort">80</td></tr>
+            <tr><td>子网掩码</td><td id="cMask">255.255.255.0</td></tr>
+            <tr><td>默认网关</td><td id="cGw">—</td></tr>
+            <tr><td>首选 DNS</td><td id="cDns1">自动</td></tr>
+            <tr><td>备用 DNS</td><td id="cDns2">自动</td></tr>
+          </table>
+        </div>
+        <p style="font-size:12px; color:#e67e22; margin-bottom:20px;">应用配置后设备将自动重启，请稍候。</p>
+        <div class="actions" style="justify-content:center;">
+          <button class="btn btn-ghost" onclick="goStep(2)">← 返回修改</button>
+          <button class="btn btn-success" id="step3Apply" onclick="applyConfig()">✓ 应用并完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧预览卡片（深色大色块 + 拓扑图） -->
+  <div class="preview-card">
+    <div class="preview-role">旁路网关</div>
+    <div class="preview-topo">
+      <svg viewBox="0 0 260 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- 路由器 -->
+        <rect x="90" y="35" width="80" height="50" rx="6" fill="#1e2040" stroke="#0984e3" stroke-width="1.5"/>
+        <rect x="100" y="45" width="16" height="10" rx="2" fill="#0984e3" opacity="0.3"/>
+        <rect x="120" y="45" width="16" height="10" rx="2" fill="#0984e3" opacity="0.3"/>
+        <rect x="140" y="45" width="16" height="10" rx="2" fill="#0984e3" opacity="0.3"/>
+        <circle cx="168" cy="48" r="4" fill="#0984e3" opacity="0.6"/>
+        <circle cx="168" cy="60" r="4" fill="#0984e3" opacity="0.6"/>
+        <circle cx="168" cy="72" r="4" fill="#0984e3" opacity="0.6"/>
+        <!-- 天线 -->
+        <line x1="130" y1="35" x2="125" y2="15" stroke="#0984e3" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <line x1="130" y1="35" x2="135" y2="15" stroke="#0984e3" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <!-- 连接线 → 设备 -->
+        <line x1="90" y1="60" x2="30" y2="60" stroke="#3a4466" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="170" y1="60" x2="230" y2="60" stroke="#3a4466" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <!-- 左设备 -->
+        <rect x="10" y="45" width="20" height="30" rx="4" fill="#1e2040" stroke="#3a4466" stroke-width="1"/>
+        <circle cx="20" cy="60" r="4" fill="#3a4466"/>
+        <!-- 右设备 -->
+        <rect x="230" y="45" width="20" height="30" rx="4" fill="#1e2040" stroke="#3a4466" stroke-width="1"/>
+        <circle cx="240" cy="60" r="4" fill="#3a4466"/>
+        <!-- 互联网箭头 -->
+        <text x="130" y="18" text-anchor="middle" fill="#5a6380" font-size="10">互联网</text>
+        <line x1="130" y1="22" x2="130" y2="28" stroke="#5a6380" stroke-width="1"/>
+        <polygon points="126,28 134,28 130,33" fill="#5a6380"/>
+      </svg>
+    </div>
+    <div class="preview-info">
+      <div class="preview-item">
+        <div class="preview-label">LAN IP</div>
+        <div class="preview-value" id="pIp">—</div>
+      </div>
+      <div class="preview-item">
+        <div class="preview-label">子网掩码</div>
+        <div class="preview-value" id="pMask">255.255.255.0</div>
+      </div>
+      <div class="preview-item">
+        <div class="preview-label">网关</div>
+        <div class="preview-value" id="pGw">—</div>
+      </div>
+      <div class="preview-item">
+        <div class="preview-label">DNS</div>
+        <div class="preview-value" id="pDns">自动</div>
+      </div>
+    </div>
+    <div class="preview-divider"></div>
+    <div class="preview-footer">Oasisic OpenWrt · 旁路网关</div>
+  </div>
+</div>
+
+<!-- 加载覆盖 -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="sp"></div>
+    <p>正在应用配置…</p>
+  </div>
+</div>
+
+<!-- 错误弹窗 -->
+<div class="error-overlay" id="errorOverlay">
+  <div class="error-box">
+    <h3>❌ 配置失败</h3>
+    <p id="errorMsg">请稍后重试。</p>
+    <button class="btn btn-primary" onclick="document.getElementById('errorOverlay').classList.remove('show')">确定</button>
+  </div>
+</div>
+
+<script>
+// ===== 配置数据 =====
+var config = {
+  lanIp: '',
+  port: '80',
+  mask: '255.255.255.0',
+  gw: '',
+  dns1: '',
+  dns2: '',
+  password: ''
+};
+
+// ===== 校验函数 =====
+function isValidIp(v) { return /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.test(v) && v.split('.').every(function(o){return +o>=0&&+o<=255;}); }
+function isValidPort(v) { var n=parseInt(v,10); return !isNaN(n) && n>=1 && n<=65535 && String(n)===v.trim(); }
+function isValidMask(v) {
+  if (!isValidIp(v)) return false;
+  var parts = v.split('.');
+  var bin = '';
+  for (var i=0;i<4;i++) { bin += ('00000000'+parseInt(parts[i],10).toString(2)).slice(-8); }
+  var firstZero = bin.indexOf('0');
+  if (firstZero === -1) return false;
+  for (var j=firstZero;j<32;j++) { if (bin[j] === '1') return false; }
+  return true;
+}
+function isValidIpOptional(v) { return v==='' || isValidIp(v); }
+function isSameSubnet(ip, gw, mask) {
+  var ipParts=ip.split('.'), gwParts=gw.split('.'), maskParts=mask.split('.');
+  for (var i=0;i<4;i++) {
+    if ((parseInt(ipParts[i],10) & parseInt(maskParts[i],10)) !== (parseInt(gwParts[i],10) & parseInt(maskParts[i],10))) return false;
+  }
+  return true;
+}
+function calcPwStrength(pw) {
+  var s=0;
+  if (pw.length>=8) s++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^a-zA-Z0-9]/.test(pw)) s++;
+  return s;
+}
+
+// ===== 实时校验与同步 =====
+function validateField(id, validator, errId) {
+  var el = document.getElementById(id);
+  var err = document.getElementById(errId);
+  var val = el.value.trim();
+  if (validator(val)) {
+    el.classList.remove('error');
+    err.classList.remove('show');
+    return true;
+  } else {
+    el.classList.add('error');
+    err.classList.add('show');
+    return false;
+  }
+}
+
+function validateGwSubnet() {
+  var warn = document.getElementById('gwWarn');
+  if (config.lanIp && config.gw && config.mask &&
+      isValidIp(config.lanIp) && isValidIp(config.gw) && isValidMask(config.mask)) {
+    warn.style.display = isSameSubnet(config.lanIp, config.gw, config.mask) ? 'none' : 'block';
+  } else { warn.style.display = 'none'; }
+}
+
+function validateStep1() {
+  var ok = true;
+  ok &= validateField('lanIp', isValidIp, 'lanIpErr');
+  ok &= validateField('port', isValidPort, 'portErr');
+  ok &= validateField('mask', isValidMask, 'maskErr');
+  ok &= validateField('gw', isValidIp, 'gwErr');
+  ok &= validateField('dns1', isValidIpOptional, 'dns1Err');
+  ok &= validateField('dns2', isValidIpOptional, 'dns2Err');
+  document.getElementById('step1Next').disabled = !ok;
+  return ok;
+}
+
+function validateStep2() {
+  var pw = document.getElementById('password').value;
+  var cf = document.getElementById('pwConfirm').value;
+  var pwOk = pw.length >= 8;
+  var cfOk = pw === cf && pw.length > 0;
+  document.getElementById('pwErr').classList.toggle('show', !pwOk && pw.length > 0);
+  document.getElementById('pwConfirmErr').classList.toggle('show', !cfOk && cf.length > 0);
+  document.getElementById('step2Next').disabled = !(pwOk && cfOk);
+  return pwOk && cfOk;
+}
+
+function updatePwStrength() {
+  var pw = document.getElementById('password').value;
+  var s = calcPwStrength(pw);
+  var bars = document.querySelectorAll('.pw-bar');
+  var labels = ['', '弱', '较弱', '中等', '强'];
+  var classes = ['', 'd','c','b','a'];
+  for (var i=0;i<4;i++) {
+    bars[i].className = 'pw-bar' + (i < s ? ' active ' + classes[s] : '');
+  }
+  document.getElementById('pwText').textContent = pw.length === 0 ? '请输入密码' : s >= 1 ? labels[s] : '太短';
+}
+
+function syncPreview() {
+  document.getElementById('pIp').textContent = config.lanIp || '—';
+  document.getElementById('pMask').textContent = config.mask || '—';
+  document.getElementById('pGw').textContent = config.gw || '—';
+  var dnsVal = [];
+  if (config.dns1) dnsVal.push(config.dns1);
+  if (config.dns2) dnsVal.push(config.dns2);
+  document.getElementById('pDns').innerHTML = dnsVal.length ? dnsVal.join('<br>') : '自动';
+  document.getElementById('pDns').className = 'preview-value' + (dnsVal.length ? '' : ' dim');
+}
+
+function updateProgressDots(step) {
+  var dots = document.querySelectorAll('.progress-dot');
+  var lines = document.querySelectorAll('.progress-line');
+  dots.forEach(function(d, i) {
+    d.classList.toggle('active', i+1 === step);
+    d.classList.toggle('done', i+1 < step);
+  });
+  lines.forEach(function(l, i) {
+    l.classList.toggle('done', i+1 < step);
+  });
+}
+
+// ===== 输入绑定 =====
+['lanIp','port','mask','gw','dns1','dns2'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', function() {
+    config[id] = this.value.trim();
+    syncPreview();
+    validateStep1();
+    validateGwSubnet();
+  });
+});
+document.getElementById('password').addEventListener('input', function() {
+  config.password = this.value;
+  updatePwStrength();
+  validateStep2();
+});
+document.getElementById('pwConfirm').addEventListener('input', function() { validateStep2(); });
+
+// ===== 步骤导航 =====
+function goStep(n) {
+  if (n === 2 && !validateStep1()) return;
+  if (n === 3 && !validateStep2()) return;
+  document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('step'+n).classList.add('active');
+  document.querySelectorAll('.step-item').forEach(function(it, i) {
+    it.classList.toggle('active', i+1 === n);
+    it.classList.toggle('done', i+1 < n);
+  });
+  updateProgressDots(n);
+  if (n === 3) {
+    document.getElementById('cIp').textContent = config.lanIp;
+    document.getElementById('cPort').textContent = config.port;
+    document.getElementById('cMask').textContent = config.mask;
+    document.getElementById('cGw').textContent = config.gw;
+    document.getElementById('cDns1').textContent = config.dns1 || '自动';
+    document.getElementById('cDns2').textContent = config.dns2 || '自动';
+  }
+}
+
+// ===== 跳过向导 =====
+function skipWizard() {
+  if (confirm('跳过设置向导将使用默认配置继续。您可以稍后在系统菜单中重新运行向导。确定跳过？')) {
+    var overlay = document.getElementById('loadingOverlay');
+    overlay.classList.add('show');
+    fetch('/cgi-bin/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({skip: true})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      overlay.classList.remove('show');
+      if (data.success) {
+        window.location.href = '/cgi-bin/luci';
+      } else {
+        document.getElementById('errorMsg').textContent = data.error || '跳过失败，请稍后重试。';
+        document.getElementById('errorOverlay').classList.add('show');
+      }
+    })
+    .catch(function() {
+      overlay.classList.remove('show');
+      document.getElementById('errorMsg').textContent = '网络请求失败，请确认设备可达。';
+      document.getElementById('errorOverlay').classList.add('show');
+    });
+  }
+}
+
+// ===== 应用配置 =====
+function applyConfig(skip) {
+  var overlay = document.getElementById('loadingOverlay');
+  overlay.classList.add('show');
+  var payload = {
+    lanIp: config.lanIp || '',
+    port: config.port || '80',
+    mask: config.mask || '255.255.255.0',
+    gw: config.gw || '',
+    dns1: config.dns1 || '',
+    dns2: config.dns2 || '',
+    password: config.password || ''
+  };
+  fetch('/cgi-bin/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    overlay.classList.remove('show');
+    if (data.success) {
+      document.querySelectorAll('.step-panel').forEach(function(p) { p.classList.remove('active'); });
+      document.querySelector('.step-item[data-step="3"]').classList.add('done');
+      var final = document.createElement('div');
+      final.className = 'step-panel active';
+      final.innerHTML = '<div class="step3-content">' +
+        '<div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1db954" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
+        '<h2>设置完成 🎉</h2>' +
+        '<p>配置已应用，设备正在重启网络服务。<br>请使用新 IP 地址 <strong>' + config.lanIp + '</strong> 访问管理界面。</p>' +
+        '<p style="font-size:12px; color:#888; margin-top:8px;">跳转中…</p></div>';
+      document.querySelector('.form-area').appendChild(final);
+      setTimeout(function() {
+        window.location.href = 'http://' + config.lanIp + ':' + (config.port||'80') + '/cgi-bin/luci';
+      }, 3000);
+    } else {
+      document.getElementById('errorMsg').textContent = data.error || '未知错误，请稍后重试。';
+      document.getElementById('errorOverlay').classList.add('show');
+    }
+  })
+  .catch(function() {
+    overlay.classList.remove('show');
+    document.getElementById('errorMsg').textContent = '网络请求失败，请确认设备可达。';
+    document.getElementById('errorOverlay').classList.add('show');
+  });
+}
+
+// ===== 初始化 =====
+syncPreview();
+validateStep1();
+updatePwStrength();
+</script>
+</body>
+</html>

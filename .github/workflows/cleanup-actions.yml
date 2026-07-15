@@ -1,0 +1,49 @@
+name: cleanup-failed-runs
+
+on:
+  schedule:
+    - cron: '0 18 */3 * *'   # 每 3 天一次，UTC 18:00 / 北京时间凌晨 2:00
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 🔍 删除 30 天前的失败运行记录
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== 删除 30 天前的失败运行记录 ==="
+          gh run list --repo "${{ github.repository }}" --status failure \
+            --json databaseId,createdAt --limit 200 \
+            --jq '.[] | select(((now - (.createdAt | fromdateiso8601)) / 86400) > 30) | .databaseId' \
+          | while read -r id; do
+              echo "  删除运行记录: $id"
+              gh run delete "$id" --repo "${{ github.repository }}" || true
+            done
+          echo "✅ 运行记录清理完成"
+
+      - name: 🗑️ 检查并清理旧 Actions 缓存
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Actions 缓存用量检查 ==="
+          gh cache list --repo "${{ github.repository }}" --json id,key,lastAccessedAt,sizeInBytes --limit 100 \
+            --jq '.[] | {id, key, lastAccessedAt, sizeInBytes}' | head -20
+          echo ""
+
+          # 删除超过 14 天未使用的缓存
+          echo "=== 删除 14 天未使用的缓存 ==="
+          gh cache list --repo "${{ github.repository }}" --json id,key,lastAccessedAt --limit 100 \
+            --jq '.[] | select(((now - (.lastAccessedAt | fromdateiso8601)) / 86400) > 14) | .id' \
+          | while read -r id; do
+              echo "  删除缓存: $id"
+              gh cache delete "$id" --repo "${{ github.repository }}" || true
+            done
+          echo "✅ 缓存清理完成"

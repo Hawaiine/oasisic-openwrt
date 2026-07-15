@@ -39,6 +39,9 @@
 | 🔐 **ucode** | LuCI 基础依赖 | 修复 LuCI CGI 403 |
 | 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，国内连通性优化 |
 | 🧭 **设置向导** | 首次启动 | 纯 HTML/CSS/JS 向导，零外部依赖 |
+| 🧪 **烟雾测试** | QEMU | 固件构建后自动启动验证 LuCI |
+| 🔏 **签名验证** | minisign | 固件完整性签名 + 用户验证指南 |
+| 🧹 **自动清理** | Actions 缓存 | 每 3 天清理失败运行 + 过期缓存 |
 
 ---
 
@@ -82,7 +85,27 @@
 ### 构建流水线
 
 ```
-check-upstream → build (全量 SDK)
+check-upstream
+  │
+  ├── ⏭️ 版本无变化 → 跳过
+  │
+  └── ✅ 检测到更新 → build job
+        │
+        ├── 💾 释放 runner 磁盘空间
+        ├── 📦 安装依赖
+        ├── 💾 恢复三层缓存（ccache + 源码树 + dl）
+        ├── ⬇️ 克隆源码（自动重试）
+        ├── ⚙️ 复制自定义文件 + 版本注入
+        ├── ⚙️ 配置 feeds（版本跟踪 + 自动重试）
+        ├── ⚙️ gen-config.sh → make defconfig
+        ├── ⬇️ make download（自动重试）
+        ├── 🏗️ 编译（失败时自动 verbose 重跑）
+        ├── 📊 ccache 统计
+        ├── 🔏 minisign 签名
+        ├── 📋 check-firmware.sh 自检
+        ├── 📤 上传 Artifact
+        ├── 🚀 发布 Release（含随机密码）
+        └── 📢 Discord 通知
 ```
 
 ### 三层缓存策略
@@ -100,8 +123,11 @@ check-upstream → build (全量 SDK)
 ```
 oasisic-openwrt/
 │
-├── .github/workflows/
-│   └── openwrt-auto-build.yml   ← CI/CD 自动化编译工作流
+├── .github/
+│   ├── workflows/
+│   │   ├── openwrt-auto-build.yml   ← CI/CD 自动化编译工作流
+│   │   └── cleanup-actions.yml      ← 定时清理失败运行 + 缓存
+│   └── minisign.pub                 ← 固件签名公钥
 │
 ├── files/                        ← 注入固件的自定义文件
 │   └── etc/

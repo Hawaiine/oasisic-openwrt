@@ -23,7 +23,7 @@ env:
   LAST_VERSION_FILE: last_build_version
   BUILD_DIR: openwrt
   CCACHE_DIR: /tmp/.ccache
-  MAKE_JOBS: 4                        # 固定并行度防 OOM
+  MAKE_JOBS: 2                        # 固定并行度，匹配 GitHub Actions 免费 runner 2 核
 
 jobs:
   # ─── Job 1: 检测上游 ─────────────────────────────────────────────────────
@@ -146,14 +146,14 @@ jobs:
       - name: ⬇️ 下载源码包
         run: |
           cd "${{ env.BUILD_DIR }}"
-          make download -j${{ env.MAKE_JOBS }} V=s
+          make download -j${{ env.MAKE_JOBS }}
 
       - name: 🏗️ 编译固件
         run: |
           cd "${{ env.BUILD_DIR }}"
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export PATH="/usr/lib/ccache:$PATH"
-          make -j${{ env.MAKE_JOBS }} V=s
+          make -j${{ env.MAKE_JOBS }} || { echo "⚠️ 编译失败，开启 verbose 重试…"; make -j1 V=s; }
 
       - name: 🧹 清理中间产物（省磁盘）
         run: |

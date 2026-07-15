@@ -1,4 +1,0 @@
-config argon 'global'
-	option brand 'Oasisic OpenWrt'
-	option hide_background '0'
-	option blur '0'

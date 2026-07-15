@@ -1,0 +1,26 @@
+config defaults
+	option syn_flood '1'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option drop_invalid '1'
+	option tcp_syncookies '1'
+
+config zone
+	option name 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option network 'lan'
+
+config zone
+	option name 'lan_ipv6'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option network 'lan'
+	option family 'ipv6'
+
+config forwarding
+	option src 'lan'
+	option dest 'lan_ipv6'

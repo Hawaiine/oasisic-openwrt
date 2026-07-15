@@ -1,6 +1,6 @@
 # =============================================================================
 # OpenWrt Auto Build — 全量 SDK 编译版
-# 检测上游更新 → 全量源码编译（含 Nikki feeds）→ 发布 Release
+# 检测上游更新 → 全量源码编译（含 Nikki feeds）→ QEMU 烟雾测试 → 发布 Release
 # =============================================================================
 name: openwrt-auto-build
 
@@ -23,7 +23,7 @@ env:
   LAST_VERSION_FILE: last_build_version
   BUILD_DIR: openwrt
   CCACHE_DIR: /tmp/.ccache
-  MAKE_JOBS: 2                        # 固定并行度，匹配 GitHub Actions 免费 runner 2 核
+  MAKE_JOBS: 2                        # GitHub Actions 免费 runner 2 核
 
 jobs:
   # ─── Job 1: 检测上游 ─────────────────────────────────────────────────────
@@ -74,10 +74,22 @@ jobs:
     needs: check-upstream
     if: needs.check-upstream.outputs.should_build == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      kernel_version: ${{ steps.kernel-version.outputs.kernel_version }}
+      nikki_version_actual: ${{ steps.nikki-version.outputs.nikki_version_actual }}
+      owrt_version: ${{ needs.check-upstream.outputs.owrt_version }}
+      owrt_ver_safe: ${{ needs.check-upstream.outputs.owrt_ver_safe }}
+      nikki_tag: ${{ needs.check-upstream.outputs.nikki_version }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: 📦 安装依赖
+      - name: 💾 释放 runner 磁盘空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY" /usr/local/lib/android || true
+          df -h
+
+      - name: 💾 安装依赖
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -99,7 +111,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.BUILD_DIR }}
-          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
+          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           restore-keys: |
             source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
 
@@ -114,26 +126,52 @@ jobs:
             dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
             dl-openwrt-
 
-      - name: ⬇️ 克隆 OpenWrt 源码
+      - name: ⬇️ 克隆 OpenWrt 源码（自动重试）
         if: steps.source-cache.outputs.cache-hit != 'true'
         run: |
           TAG="${{ needs.check-upstream.outputs.owrt_version }}"
-          rm -rf "${{ env.BUILD_DIR }}"
-          git clone --depth 1 --branch "$TAG" \
-            https://github.com/${{ env.OWRT_REPO }}.git \
-            "${{ env.BUILD_DIR }}"
+          n=0
+          until [ $n -ge 3 ]; do
+            rm -rf "${{ env.BUILD_DIR }}"
+            git clone --depth 1 --branch "$TAG" \
+              https://github.com/${{ env.OWRT_REPO }}.git \
+              "${{ env.BUILD_DIR }}" && break
+            n=$((n+1))
+            echo "⏳ 克隆源码第 $n 次重试..."
+            sleep 30
+          done
+          if [ $n -ge 3 ]; then
+            echo "❌ 克隆源码失败（3 次重试）"
+            exit 1
+          fi
 
       - name: ⚙️ 复制自定义文件
         run: |
+          mkdir -p "${{ env.BUILD_DIR }}/files"
           cp -r files/* "${{ env.BUILD_DIR }}/files/"
+          # 替换版本号占位符
+          OWRT_VER="${{ needs.check-upstream.outputs.owrt_version }}"
+          sed -i "s/@OWRT_VERSION@/${OWRT_VER}/g" "${{ env.BUILD_DIR }}/files/www/setup.html"
 
-      - name: ⚙️ 配置 feeds（含 nikki）
+      - name: ⚙️ 配置 feeds（版本跟踪，自动重试）
         run: |
-          cp "${{ github.workspace }}/feeds.conf" "${{ env.BUILD_DIR }}/feeds.conf.default"
+          bash scripts/gen-feeds-conf.sh \
+            "${{ needs.check-upstream.outputs.owrt_version }}" \
+            "${{ needs.check-upstream.outputs.nikki_version }}" \
+            > "${{ env.BUILD_DIR }}/feeds.conf.default"
           cd "${{ env.BUILD_DIR }}"
-          # 清理 feeds 中残留的 untracked 文件，避免 git pull 冲突
           rm -rf feeds 2>/dev/null || true
-          ./scripts/feeds update -a
+          n=0
+          until [ $n -ge 3 ]; do
+            ./scripts/feeds update -a && break
+            n=$((n+1))
+            echo "⏳ feeds update 第 $n 次重试..."
+            sleep 30
+          done
+          if [ $n -ge 3 ]; then
+            echo "❌ feeds update 失败"
+            exit 1
+          fi
           ./scripts/feeds install -a
 
       - name: ⚙️ 生成 .config
@@ -143,10 +181,20 @@ jobs:
           make defconfig
           echo "✅ defconfig 完成"
 
-      - name: ⬇️ 下载源码包
+      - name: ⬇️ 下载源码包（自动重试）
         run: |
           cd "${{ env.BUILD_DIR }}"
-          make download -j${{ env.MAKE_JOBS }}
+          n=0
+          until [ $n -ge 3 ]; do
+            make download -j${{ env.MAKE_JOBS }} && break
+            n=$((n+1))
+            echo "⏳ make download 第 $n 次重试..."
+            sleep 30
+          done
+          if [ $n -ge 3 ]; then
+            echo "❌ make download 失败"
+            exit 1
+          fi
 
       - name: 🏗️ 编译固件
         run: |
@@ -155,36 +203,80 @@ jobs:
           export PATH="/usr/lib/ccache:$PATH"
           make -j${{ env.MAKE_JOBS }} || { echo "⚠️ 编译失败，开启 verbose 重试…"; make -j1 V=s; }
 
-      - name: 🧹 清理中间产物（省磁盘）
+      - name: 📊 ccache 统计
+        run: |
+          echo "## 📊 ccache 统计" >> "$GITHUB_STEP_SUMMARY"
+          echo '<table>' >> "$GITHUB_STEP_SUMMARY"
+          ccache -s | while IFS= read -r line; do
+            label=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]].*//')
+            val=$(echo "$line" | sed 's/^[[:space:]]*[^[:space:]]*[[:space:]]*//')
+            case "$label" in
+              "cache") EN="Cache size"; ZH="缓存大小" ;;
+              "cache_hit") EN="Cache hit rate"; ZH="缓存命中率" ;;
+              "called") EN="Cache calls"; ZH="编译调用次数" ;;
+              "called_for") EN="Cache hits"; ZH="缓存命中" ;;
+              "compile") EN="Compile misses"; ZH="编译未命中" ;;
+              "local") EN="Local storage"; ZH="本地存储" ;;
+              *) EN="$label"; ZH="$label" ;;
+            esac
+            echo "<tr><td>$label</td><td>$val</td><td><small>$ZH</small></td></tr>" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo '</table>' >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ ccache 统计已写入 job summary"
+
+      - name: 🐧 提取内核版本
+        id: kernel-version
+        run: |
+          KV=$(grep -oP '^KERNEL_PATCHVER\s*:?=\s*\K.*' "${{ env.BUILD_DIR }}/include/kernel-version.mk" 2>/dev/null | head -1 || echo "")
+          if [ -z "$KV" ]; then
+            KV=$(grep -oP 'CONFIG_LINUX_VERSION_STRING\s*=\s*"\K[^"]*' "${{ env.BUILD_DIR }}/.config" 2>/dev/null || echo "")
+          fi
+          echo "kernel_version=${KV:-?}" >> "$GITHUB_OUTPUT"
+          echo "✅ 内核版本: ${KV:-?}"
+
+      - name: 📡 提取 Nikki 版本
+        id: nikki-version
+        run: |
+          for dir in "${{ env.BUILD_DIR }}/bin/packages/x86_64"/*; do
+            APK=$(find "$dir" -name "luci-app-nikki*.apk" 2>/dev/null | head -1)
+            IPK=$(find "$dir" -name "luci-app-nikki_*.ipk" 2>/dev/null | head -1)
+            if [ -n "$APK" ]; then
+              VER=$(basename "$APK" | sed 's/luci-app-nikki-//;s/-r[0-9]*\.apk$//')
+              break
+            elif [ -n "$IPK" ]; then
+              VER=$(basename "$IPK" | sed 's/luci-app-nikki_//;s/_.*//')
+              break
+            fi
+          done
+          echo "nikki_version_actual=${VER:-${{ needs.check-upstream.outputs.nikki_version }}}" >> "$GITHUB_OUTPUT"
+          echo "✅ Nikki 版本: ${VER:-${{ needs.check-upstream.outputs.nikki_version }}}"
+
+      - name: 🧹 清理中间产物
         run: |
           du -sh "${{ env.BUILD_DIR }}"
-          rm -rf "${{ env.BUILD_DIR }}/build_dir"
-          rm -rf "${{ env.BUILD_DIR }}/staging_dir/target-*"
+          rm -rf "${{ env.BUILD_DIR }}/build_dir" || true
+          rm -rf "${{ env.BUILD_DIR }}/staging_dir/target-*" || true
           du -sh "${{ env.BUILD_DIR }}"
           echo "✅ 清理完成"
 
+      - name: 🔏 固件签名（minisign）
+        run: |
+          pip install pynacl -q
+          bash scripts/minisign-sign.sh "${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums"
+
       - name: 📋 展示编译产物
         run: |
+          bash scripts/check-firmware.sh "${{ env.BUILD_DIR }}"
+          echo ""
           echo "=== 固件镜像 ==="
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.img.gz 2>/dev/null || echo "(无)"
-          ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.iso 2>/dev/null || echo "(无)"
-          echo ""
-          echo "=== IPK 插件包（主题 + 插件 + Nikki）==="
-          for dir in luci nikki; do
-            COUNT=$(find "${{ env.BUILD_DIR }}/bin/packages/x86_64/$dir" -name "*.ipk" 2>/dev/null | wc -l)
-            echo "  $dir/: $COUNT 个 IPK"
-            find "${{ env.BUILD_DIR }}/bin/packages/x86_64/$dir" -name "*.ipk" 2>/dev/null | sort
-          done
           echo ""
           echo "=== feeds.conf.default ==="
           cat "${{ env.BUILD_DIR }}/feeds.conf.default" 2>/dev/null || echo "(无)"
-          echo ""
-          echo "=== sha256sums ==="
-          cat "${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums" 2>/dev/null || echo "(无)"
 
       - name: 💾 保存版本标识
         run: |
-          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ needs.check-upstream.outputs.kernel_version }}" \
+          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ steps.kernel-version.outputs.kernel_version }}" \
             > "${{ env.LAST_VERSION_FILE }}"
 
       - name: 📤 上传固件 Artifact
@@ -197,7 +289,11 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums.minisig
             ${{ env.BUILD_DIR }}/feeds.conf.default
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/config.buildinfo
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/profiles.json
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic.manifest
           retention-days: 30
 
       - name: 📥 下载 Artifact（准备 Release 附件）
@@ -208,40 +304,50 @@ jobs:
 
       - name: 🏷️ 生成 Release body
         run: |
-          cat > release-body.md << 'RELEASEEOF'
+          NV="${{ steps.nikki-version.outputs.nikki_version_actual }}"
+          KV="${{ steps.kernel-version.outputs.kernel_version }}"
+          cat > release-body.md << RELEASEEOF
           ## 🏝️ Oasisic OpenWrt 自动构建
 
           | 项 | 值 |
           |----|-----|
           | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
-          | Nikki 版本 | ${{ needs.check-upstream.outputs.nikki_version }} |
-          | Linux 内核 | ${{ needs.check-upstream.outputs.kernel_version }} |
-          | 架构 | x86/64, EFI, squashfs |
-          | 编译方式 | **全量 SDK**（Nikki 从 feeds 编译） |
+          | Nikki 版本 | ${NV} |
           RELEASEEOF
-          echo "| 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |" >> release-body.md
-          cat >> release-body.md << 'RELEASEEOF'
-          | 主机名 | Oasisic OpenWrt |
-          | LAN IP | 10.10.10.252/24 | 网关 | 10.10.10.253 |
+          if [ -n "$KV" ] && [ "$KV" != "?" ]; then
+            echo "| Linux 内核 | ${KV} |" >> release-body.md
+          fi
+          cat >> release-body.md << RELEASEEOF
+          | 架构 | x86/64, EFI, squashfs |
+          | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
+
+          ### 🔑 登录信息
+          - **主机名**: ${{ needs.check-upstream.outputs.owrt_version }}
+          - **用户名**: root
+          - **首次开机**: DHCP 自动获取 IP（到主路由查看）
 
           ### 📦 预装组件
-          - **代理**: Nikki + mihomo-meta ${{ needs.check-upstream.outputs.nikki_version }}
-          - **主题**: luci-theme-argon 2.x + argon-config
+          - **代理**: Nikki + mihomo-meta ${NV}
+          - **主题**: luci-theme-bootstrap
           - **PVE**: qemu-ga + virtio 全系驱动
-          - **升级**: luci-app-attendedsysupgrade
-          - **统计**: luci-app-statistics
           - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
           - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
 
           ### 📥 下载
-          - `squashfs-combined-efi.img.gz` — EFI 启动 (推荐 PVE UEFI)
-          - `squashfs-combined.img.gz` — BIOS 启动
-          - `image.iso` — ISO 镜像
-          - `feeds.conf.default` — 编译源列表
-          - `sha256sums` — 固件校验和
+          - \`squashfs-combined-efi.img.gz\` — EFI 启动 (推荐 PVE UEFI)
+          - \`squashfs-combined.img.gz\` — BIOS 启动
+          - \`image.iso\` — ISO 镜像
+          - \`feeds.conf.default\` — 编译源列表
+          - \`sha256sums\` — 固件校验和
+          - \`sha256sums.minisig\` — minisign 签名
+          - \`config.buildinfo\` — 编译配置
+          - \`profiles.json\` — 目标架构
+          - \`manifest\` — 包列表
 
-          ### 🔑 默认密码
-          首次登录后请立即修改密码。详情见 README。
+          ### 🔑 首次使用
+          1. PVE 导入磁盘（见 README）
+          2. 启动后访问 IP 进入设置向导
+          3. 配置静态 IP + 管理员密码
           RELEASEEOF
 
       - name: 🚀 发布 Release
@@ -261,14 +367,17 @@ jobs:
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
+            release-artifacts/bin/targets/x86/64/config.buildinfo
+            release-artifacts/bin/targets/x86/64/profiles.json
+            release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic.manifest
 
       - name: 📢 Discord 通知（🖥️・固件发布）
         if: success()
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
-          NIKKI_VER: ${{ needs.check-upstream.outputs.nikki_version }}
-          KERNEL_VER: ${{ needs.check-upstream.outputs.kernel_version }}
+          NIKKI_VER: ${{ steps.nikki-version.outputs.nikki_version_actual }}
+          KERNEL_VER: ${{ steps.kernel-version.outputs.kernel_version }}
           TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')

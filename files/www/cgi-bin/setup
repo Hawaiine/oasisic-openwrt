@@ -1,0 +1,142 @@
+#!/bin/sh
+# Oasisic OpenWrt — 设置向导 CGI 后端
+# 接收 JSON POST → 写 uci 配置 + 设密码 + 清除 .firstboot
+
+echo "Content-Type: application/json"
+echo ""
+
+# 加载首次启动状态机
+. /usr/lib/oasisic/firstboot.sh
+
+# 首次启动校验：只有 .oasisic-firstboot 存在时才可访问
+oasisic_require_firstboot_or_exit
+
+# 读取 POST 数据
+INPUT=$(cat)
+if [ -z "$INPUT" ]; then
+    echo '{"success":false,"error":"无输入数据"}'
+    exit 0
+fi
+
+# 用 sed 逐字段提取 JSON 值
+lanIp=$(echo "$INPUT" | sed -n 's/.*"lanIp"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+port=$(echo "$INPUT" | sed -n 's/.*"port"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+mask=$(echo "$INPUT" | sed -n 's/.*"mask"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+gw=$(echo "$INPUT" | sed -n 's/.*"gw"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+dns1=$(echo "$INPUT" | sed -n 's/.*"dns1"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+dns2=$(echo "$INPUT" | sed -n 's/.*"dns2"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+password=$(echo "$INPUT" | sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+skip=$(echo "$INPUT" | sed -n 's/.*"skip"[[:space:]]*:[[:space:]]*\(true\).*/\1/p')
+
+# ---- 跳过模式：清除标记 + 自禁用（不改配置）----
+if [ "$skip" = "true" ]; then
+    oasisic_clear_firstboot /www/cgi-bin/setup
+    /etc/init.d/uhttpd restart 2>/dev/null &
+    echo '{"success":true,"mode":"skip"}'
+    exit 0
+fi
+
+# 校验必填字段
+if [ -z "$lanIp" ] || [ -z "$port" ] || [ -z "$mask" ] || [ -z "$gw" ]; then
+    echo '{"success":false,"error":"必填字段不能为空"}'
+    exit 0
+fi
+
+# ─── IPv4 格式校验（lanIp / mask / gw）────────────
+validate_ipv4() {
+    _ip="$1"
+    case "$_ip" in
+        ''|*[!0-9.]*) return 1 ;;
+    esac
+    _a="${_ip%%.*}"
+    _rest="${_ip#*.}"
+    _b="${_rest%%.*}"
+    _rest="${_rest#*.}"
+    _c="${_rest%%.*}"
+    _d="${_rest#*.}"
+    case "$_a" in ''|*[!0-9]*) return 1 ;; esac
+    case "$_b" in ''|*[!0-9]*) return 1 ;; esac
+    case "$_c" in ''|*[!0-9]*) return 1 ;; esac
+    case "$_d" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$_a" -ge 0 ] 2>/dev/null && [ "$_a" -le 255 ] 2>/dev/null || return 1
+    [ "$_b" -ge 0 ] 2>/dev/null && [ "$_b" -le 255 ] 2>/dev/null || return 1
+    [ "$_c" -ge 0 ] 2>/dev/null && [ "$_c" -le 255 ] 2>/dev/null || return 1
+    [ "$_d" -ge 0 ] 2>/dev/null && [ "$_d" -le 255 ] 2>/dev/null || return 1
+    return 0
+}
+
+if ! validate_ipv4 "$lanIp"; then
+    echo '{"success":false,"error":"LAN IP 格式无效（需要 IPv4 地址）"}'
+    exit 0
+fi
+if ! validate_ipv4 "$mask"; then
+    echo '{"success":false,"error":"子网掩码格式无效"}'
+    exit 0
+fi
+if ! validate_ipv4 "$gw"; then
+    echo '{"success":false,"error":"网关格式无效"}'
+    exit 0
+fi
+if [ -n "$dns1" ] && ! validate_ipv4 "$dns1"; then
+    echo '{"success":false,"error":"DNS1 格式无效"}'
+    exit 0
+fi
+if [ -n "$dns2" ] && ! validate_ipv4 "$dns2"; then
+    echo '{"success":false,"error":"DNS2 格式无效"}'
+    exit 0
+fi
+
+# ─── Port 范围校验 ────────────────────────
+case "$port" in
+    ''|*[!0-9]*) echo '{"success":false,"error":"端口必须为数字"}'; exit 0 ;;
+esac
+if [ "$port" -lt 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
+    echo '{"success":false,"error":"端口范围需为 1-65535"}'
+    exit 0
+fi
+
+# 更新网络配置 — 从 DHCP 切换为静态
+uci set network.lan.proto='static'
+uci set network.lan.ipaddr="$lanIp"
+uci set network.lan.netmask="$mask"
+uci set network.lan.gateway="$gw"
+
+# 清空旧 DNS 再设置
+uci del network.lan.dns 2>/dev/null || true
+if [ -n "$dns1" ]; then
+    uci add_list network.lan.dns="$dns1"
+fi
+if [ -n "$dns2" ]; then
+    uci add_list network.lan.dns="$dns2"
+fi
+
+# 更新 uhttpd 端口
+uci del uhttpd.main.listen_http 2>/dev/null || true
+uci add_list uhttpd.main.listen_http="0.0.0.0:$port"
+uci add_list uhttpd.main.listen_http="[::]:$port"
+
+# 更新 dnsmasq 品牌域名解析
+uci del dhcp.@dnsmasq[0].address 2>/dev/null || true
+uci add_list dhcp.@dnsmasq[0].address="/oasisic.net/$lanIp/"
+
+# DHCP 关闭 + IPv4 禁用（IPv6 中继由 99-custom 管理，不覆盖）
+uci set dhcp.lan.ignore='1'
+uci set dhcp.lan.dhcpv4='disabled'
+
+uci commit network
+uci commit uhttpd
+uci commit dhcp
+
+# 设置 root 密码
+if [ -n "$password" ]; then
+    printf '%s\n%s\n' "$password" "$password" | passwd root >/dev/null 2>&1
+fi
+
+# 清除首次启动标记 + 自禁用
+oasisic_clear_firstboot /www/cgi-bin/setup
+
+# 重启网络和服务
+/etc/init.d/network reload 2>/dev/null &
+/etc/init.d/uhttpd restart 2>/dev/null &
+
+echo '{"success":true}'

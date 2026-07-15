@@ -13,22 +13,15 @@
 
 ## 📋 项目简介
 
-**Oasisic OpenWrt** 是一套全自动化的 OpenWrt 固件编译系统。每当上游更新时，自动检测并用 **全量 SDK** 编译出带 Nikki 代理、luci-theme-argon 主题、PVE 优化驱动、北京时间时区的专用固件。
+**Oasisic OpenWrt** 是一套全自动化的 OpenWrt 固件编译系统。每当上游更新时，自动检测并编译出带 Nikki 代理、bootstrap 主题、PVE 优化驱动的专用固件。
 
-```text
-╔═══════════════════════════════════════════════╗
-║              🏝️ Oasisic OpenWrt               ║
-╠═══════════════════════════════════════════════╣
-║                                               ║
-║  📡 检测上游 → 🏗️ 全量编译 → 🚀 Release     ║
-║                                               ║
-║  触发源: OpenWrt / Nikki / Linux LTS          ║
-║                                               ║
-║  ⏱  ~90min · 增量 ~30min (三层缓存)          ║
-║  📦  固件 · sha256sums · feeds.conf           ║
-║                                               ║
-╚═══════════════════════════════════════════════╝
-```
+| | |
+|---|---|
+| 🏝️ **项目** | **Oasisic OpenWrt** |
+| 📡 **流程** | 检测上游 → 全量编译 → Release |
+| 🎯 **触发源** | OpenWrt / Nikki |
+| ⏱ **耗时** | ~77min · 增量 ~30min（三层缓存） |
+| 📦 **产物** | 固件 · sha256sums · feeds.conf |
 
 ---
 
@@ -37,15 +30,14 @@
 | 类别 | 特性 | 说明 |
 |------|------|------|
 | 🏗️ **编译方式** | 全量 SDK | 从源码编译全部组件，Nikki 从 feeds 源码集成 |
-| 🔄 **自动触发** | 3 源检测 | OpenWrt / Nikki / 内核 LTS，无变化自动跳过 |
-| 🛡️ **代理** | Nikki (mihomo) | 最新版，源码编译，无版本滞后问题 |
-| 🎨 **主题** | luci-theme-argon | 2.x + argon-config，品牌名可配 |
+| 🔄 **自动触发** | 2 源检测 | OpenWrt / Nikki 自动检测新 tag |
+| 🛡️ **代理** | Nikki (mihomo) | 自动检测最新版，旁路网关模式 |
 | 🖥️ **PVE 集成** | QEMU Guest Agent | virtio 全系驱动 (net/blk/scsi/rng/serial) |
-| 🏠 **网络预设** | 静态 IP 10.10.10.252/24 | 开箱即用 |
+| 🏠 **网络预设** | DHCP 客户端 | 首次开机自动获取 IP，无硬编码 IP |
 | 🕐 **时区** | 北京时间 CST-8 | 日志、cron 全 UTC+8 |
-| 📊 **监控** | 硬件看板 | statistics 仪表盘 |
-| 🔄 **升级** | 在线检测 | luci-app-attendedsysupgrade |
-| 🧹 **纯净安全** | 官方源检查 | 仅官方 feeds + Nikki 源 |
+| 🧹 **纯净安全** | 官方源检查 | 仅官方 feeds + Nikki，GitHub 镜像锁定分支 |
+| 🔐 **ucode** | LuCI 基础依赖 | 修复 LuCI CGI 403 |
+| 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，国内连通性优化 |
 
 ---
 
@@ -54,39 +46,16 @@
 ### 构建流水线
 
 ```
-check-upstream
-  │
-  ├── ⏭️ 版本无变化 → 跳过，0 成本退出
-  │
-  └── ✅ 检测到更新 → build job
-        │
-        ├── 📦 安装依赖 (build-essential, gawk, ccache, genisoimage...)
-        ├── 💾 恢复 ccache 缓存       ← key: ccache-openwrt-{ver}-{config_hash}
-        ├── 💾 恢复源码树缓存          ← key: source-openwrt-{ver}-{config_hash}
-        ├── 💾 恢复 dl 缓存           ← key: dl-openwrt-{ver}-{config_hash}
-        │
-        ├── ⬇️ 克隆 OpenWrt 源码      ← 缓存未命中时执行
-        ├── ⚙️ cp files/ 注入配置
-        ├── ⚙️ feeds update -a        ← 含 nikki 源
-        │    ├── packages / luci / routing / telephony / video
-        │    └── nikki ✅
-        ├── ⚙️ make defconfig
-        ├── ⬇️ make download
-        ├── 🏗️ make -j4 V=s            ← 核心编译 (~77min)
-        ├── 🧹 清理 build_dir         ← 省磁盘
-        ├── 📋 展示产物清单
-        ├── 💾 保存版本标识
-        ├── 📤 上传 Artifact
-        └── 🚀 发布 Release
+check-upstream → build (全量 SDK)
 ```
 
 ### 三层缓存策略
 
-| 缓存 | 缓存路径 | Key 策略 | 命中后效果 |
-|------|----------|----------|-----------|
-| 🔧 ccache | `/tmp/.ccache` | `ccache-openwrt-{ver}-{config_hash}` | 减少重复编译 ~60% |
-| 📦 源码树 | `openwrt/` | `source-openwrt-{ver}-{config_hash}` | 跳过 git clone (1GB+) |
-| 📥 dl 包 | `openwrt/dl/` + `feeds/` | `dl-openwrt-{ver}-{config_hash}` | 跳过下载 (数百 MB) |
+| 缓存 | 缓存路径 | Key 策略 |
+|------|----------|----------|
+| 🔧 ccache | `/tmp/.ccache` | `ccache-openwrt-{ver}-{config_hash}` |
+| 📦 源码树 | `openwrt/` | `source-openwrt-{ver}-{config_hash}` |
+| 📥 dl 包 | `openwrt/dl/` + `feeds/` | `dl-openwrt-{ver}-{config_hash}` |
 
 ---
 
@@ -96,71 +65,41 @@ check-upstream
 oasisic-openwrt/
 │
 ├── .github/workflows/
-│   └── openwrt-auto-build.yml   ← CI/CD 全量编译工作流 (260+ 行)
+│   └── openwrt-auto-build.yml   ← CI/CD 自动化编译工作流
 │
 ├── files/                        ← 注入固件的自定义文件
 │   └── etc/
 │       ├── config/
-│       │   ├── network           ← LAN 10.10.10.252/24
-│       │   ├── system            ← CST-8 / 4 个 NTP
-│       │   ├── luci              ← zh-cn / argon
-│       │   └── argon-config      ← 品牌名
-│       ├── shadow                ← root 默认密码 Oasisic@2025
-│       ├── uci-defaults/
-│       │   └── 99-custom         ← 首次启动脚本 → 自毁
-│       └── banner                ← SSH 欢迎画
+│       │   ├── network           ← LAN DHCP（首次开机自动获取 IP）
+│       │   ├── firewall          ← 旁路网关全 ACCEPT 规则
+│       │   ├── system            ← hostname / NTP / 时区
+│       │   └── dhcp              ← dnsmasq + IPv6 中继
+│       ├── banner                ← OpenWrt 官方 logo + Oasisic 品牌
+│       └── uci-defaults/
+│           └── 99-custom         ← 首次启动配置脚本
 │
 ├── scripts/
-│   └── gen-config.sh             ← 生成 .config (184 行包配置)
+│   ├── gen-config.sh             ← 包配置生成器（明确声明所有包）
+│   ├── gen-feeds-conf.sh         ← 动态 feeds.conf 生成器
+│   ├── check-firmware.sh         ← 固件完整性自检
+│   └── notify-discord.py         ← Discord 通知
 │
-├── feeds.conf                    ← 源码源（含 nikki）
-└── last_build_version            ← CI 版本缓存
+├── feeds.conf                    ← 官方 GitHub 镜像 + 分支锁定
+├── last_build_version            ← 上次构建的版本标识
+└── README.md                     ← 本文档
 ```
 
 ---
 
-## Release 产物清单
+## 🚀 快速开始
 
-每次构建成功后 Release 包含：
+### 1️⃣ Fork 此仓库
 
-```
-📦 oasisic-openwrt-25.12.5 Release
-│
-├── 📄 固件镜像
-│   ├── openwrt-x86-64-generic-squashfs-combined-efi.img.gz   ← PVE EFI 启动 (推荐)
-│   ├── openwrt-x86-64-generic-squashfs-combined.img.gz       ← BIOS 启动
-│   ├── openwrt-x86-64-generic-image-efi.iso                  ← EFI ISO
-│   └── openwrt-x86-64-generic-image.iso                      ← BIOS ISO
-│
-├── 📄 sha256sums                     ← 固件校验和
-└── 📄 feeds.conf.default             ← 编译使用的源列表
-```
+### 2️⃣ 配置 GitHub Secrets
 
----
-
-## ⚡ 快速开始
-
-### 1️⃣ Fork 仓库
-
-```bash
-git clone https://github.com/你的用户名/oasisic-openwrt.git
-cd oasisic-openwrt
-```
-
-### 2️⃣ 自定义配置
-
-```bash
-# 改 IP 地址 (默认 10.10.10.252)
-vim files/etc/config/network
-
-# 改 root 密码 (默认 Oasisic@2025)
-# Ubuntu: sudo apt install whois
-mkpasswd -m sha-512 '你的密码'
-# 把输出粘到 files/etc/shadow 的 root: 行
-
-# 改品牌名（登录页左上角）
-vim files/etc/config/argon-config
-```
+| Secret | 用途 |
+|--------|------|
+| `DISCORD_BOT_TOKEN` | Discord 通知机器人 Token |
 
 ### 3️⃣ 推送 → 自动构建
 
@@ -170,7 +109,7 @@ git commit -m "✨ init: 初始化自定义配置"
 git push origin main
 ```
 
-GitHub Actions 每天北京时间 14:00 自动检测。也可手动触发：**Actions → openwrt-auto-build → Run workflow**。
+GitHub Actions 每天北京时间 14:00 自动检测上游。也可手动触发。
 
 ### 4️⃣ PVE 导入
 
@@ -189,6 +128,8 @@ qm set 100 --boot order=scsi0 --agent enabled=1
 qm start 100
 ```
 
+> ⚠️ **首次开机注意事项：** 固件默认 DHCP 客户端模式。启动后到主路由 DHCP 列表中查找主机名 `Oasisic-OpenWrt`。
+
 ---
 
 ## 🛡️ 安全机制
@@ -196,11 +137,10 @@ qm start 100
 | 维度 | 措施 |
 |------|------|
 | 📡 源码源 | 仅 `github.com/openwrt/openwrt` 官方库 |
-| 📦 feeds | 官方源: packages / luci / routing / telephony / video + Nikki |
+| 📦 feeds | 官方 GitHub 镜像，锁定 openwrt-25.12 分支 |
 | 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` |
 | 🧬 包声明 | `gen-config.sh` 显式声明所有包，无隐藏依赖 |
 | 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁 |
-| 🔒 密码 | 默认 `Oasisic@2025`，首次登录后请修改 |
 | 🚫 无后门 | 不包含任何第三方源、闭源驱动、遥测脚本 |
 
 ---
@@ -211,31 +151,17 @@ qm start 100
 
 | 症状 | 原因 | 解决 |
 |------|------|------|
-| `make download` 失败 | 缺少 `mkisofs` | 确保 workflow 安装 `genisoimage` |
-| Release 失败 `Resource not accessible` | 缺少 `contents: write` 权限 | 在 workflow 添加 `permissions: contents: write` |
-| `make` 只跑了几秒 | `2>&1 | tail -30` 管道截断 | 移除 `| tail`，直接 `make -j4 V=s` |
-| 缓存不命中 | `run_id` 导致 key 每次都变 | 用版本号代替 `run_id` |
-| Node.js 20 deprecation | action 版本太旧 | 升级到 `cache@v5`, `upload-artifact@v7`, `action-gh-release@v3` |
+| `make download` 失败 | 缺少 `genisoimage` | 确保 workflow 安装 `genisoimage` |
+| Release 失败 `Resource not accessible` | 缺少权限 | 添加 `permissions: contents: write` |
+| 缓存不命中 | key 设计错误 | 用版本号代替 `run_id` |
+| LuCI 无限转圈 | 缺少 ucode base 包 | 确保 `CONFIG_PACKAGE_ucode=y` |
+| Feeds 更新失败 | 分支名语法错误 | 25.12 用 `;` 而非 `^` |
 
 ### 编译时间参考
 
 | 场景 | 首次 (cold) | 二次+ (ccache+缓存命中) |
 |------|:-----------:|:----------------------:|
 | 全量 SDK | ~77min | ~30-45min |
-
-### 常见问题
-
-**Q: 怎么改成我的 IP？**
-A: 改 `files/etc/config/network` 里的 `option ipaddr`、`option gateway`、`list dns`，推送触发重新编译。
-
-**Q: 怎么加包？**
-A: 在 `scripts/gen-config.sh` 对应分类下加 `CONFIG_PACKAGE_xxx=y`。
-
-**Q: 固件刷了进不去管理界面？**
-A: 确认 PVE 网桥模式：VM 要用 `virtio` 网卡，并确认 `files/etc/config/network` 里的 `device` 名称匹配。
-
-**Q: IPK 包怎么单独安装？**
-A: IPK 包在 Actions 构建 Artifact 中可下载，解压后 `opkg install *.ipk` 即可，无需重新编译整套固件。
 
 ---
 

@@ -38,6 +38,42 @@
 | 🧹 **纯净安全** | 官方源检查 | 仅官方 feeds + Nikki，GitHub 镜像锁定分支 |
 | 🔐 **ucode** | LuCI 基础依赖 | 修复 LuCI CGI 403 |
 | 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，国内连通性优化 |
+| 🧭 **设置向导** | 首次启动 | 纯 HTML/CSS/JS 向导，零外部依赖 |
+
+---
+
+## 🧭 设置向导（首次启动）
+
+首次开机自动进入设置向导，引导用户配置网络和密码。
+
+### 流程
+
+```
+开机 → uci-defaults 创建 .oasisic-firstboot 标记
+     → 访问 IP → index.html 检测标记
+     → 有标记 → 跳转 setup.html 设置向导
+     → 用户完成配置 → CGI 写入配置 + 清除标记 + 重启 uhttpd
+     → 下次访问 → 跳转 LuCI 管理界面
+```
+
+### 文件结构
+
+| 文件 | 说明 |
+|------|------|
+| `files/www/index.html` | 入口页，检测首次启动标记 |
+| `files/www/setup.html` | 设置向导页面（混搭光暗主题，781 行） |
+| `files/www/cgi-bin/setup` | CGI 后端，接收 JSON 写 uci 配置 |
+| `files/www/cgi-bin/check-firstboot` | CGI 检测接口 |
+| `files/etc/uci-defaults/99-custom` | 首次启动创建标记 |
+| `files/usr/lib/oasisic/firstboot.sh` | 首次启动状态机共享库 |
+
+### 安全设计
+
+- 零外部依赖（无 CDN 字体/图标/JS 库）
+- 首次启动标记 `/etc/.oasisic-firstboot` 控制访问
+- 设置完成后 CGI 自禁用（chmod 000）
+- IPv4 格式校验 + 端口范围校验 + 密码一致性校验
+- 跳过模式：只清标记不改配置
 
 ---
 

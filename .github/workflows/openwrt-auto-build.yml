@@ -90,7 +90,7 @@ jobs:
             "$AGENT_TOOLSDIRECTORY" /usr/local/lib/android || true
           df -h
 
-      - name: 💾 安装依赖
+      - name: 📦 安装依赖
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
@@ -161,7 +161,6 @@ jobs:
         run: |
           mkdir -p "${{ env.BUILD_DIR }}/files"
           cp -r files/* "${{ env.BUILD_DIR }}/files/"
-          # 替换版本号占位符
           OWRT_VER="${{ needs.check-upstream.outputs.owrt_version }}"
           sed -i "s/@OWRT_VERSION@/${OWRT_VER}/g" "${{ env.BUILD_DIR }}/files/www/setup.html"
 
@@ -234,7 +233,6 @@ jobs:
             echo "<tr><td>$label</td><td>$val</td><td><small>$ZH</small></td></tr>" >> "$GITHUB_STEP_SUMMARY"
           done
           echo '</table>' >> "$GITHUB_STEP_SUMMARY"
-          echo "✅ ccache 统计已写入 job summary"
 
       - name: 🐧 提取内核版本
         id: kernel-version
@@ -244,7 +242,6 @@ jobs:
             KV=$(grep -oP 'CONFIG_LINUX_VERSION_STRING\s*=\s*"\K[^"]*' "${{ env.BUILD_DIR }}/.config" 2>/dev/null || echo "")
           fi
           echo "kernel_version=${KV:-?}" >> "$GITHUB_OUTPUT"
-          echo "✅ 内核版本: ${KV:-?}"
 
       - name: 📡 提取 Nikki 版本
         id: nikki-version
@@ -261,7 +258,6 @@ jobs:
             fi
           done
           echo "nikki_version_actual=${VER:-${{ needs.check-upstream.outputs.nikki_version }}}" >> "$GITHUB_OUTPUT"
-          echo "✅ Nikki 版本: ${VER:-${{ needs.check-upstream.outputs.nikki_version }}}"
 
       - name: 🧹 清理中间产物
         run: |
@@ -269,7 +265,6 @@ jobs:
           rm -rf "${{ env.BUILD_DIR }}/build_dir" || true
           rm -rf "${{ env.BUILD_DIR }}/staging_dir/target-*" || true
           du -sh "${{ env.BUILD_DIR }}"
-          echo "✅ 清理完成"
 
       - name: 🔏 固件签名（minisign）
         run: |
@@ -282,9 +277,6 @@ jobs:
           echo ""
           echo "=== 固件镜像 ==="
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.img.gz 2>/dev/null || echo "(无)"
-          echo ""
-          echo "=== feeds.conf.default ==="
-          cat "${{ env.BUILD_DIR }}/feeds.conf.default" 2>/dev/null || echo "(无)"
 
       - name: 💾 保存版本标识
         run: |
@@ -308,23 +300,123 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic.manifest
           retention-days: 30
 
-      - name: 📥 下载 Artifact（准备 Release 附件）
+  # ─── Job 3: QEMU 烟雾测试 ────────────────────────────────────────────────
+  qemu-smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 📥 下载固件 Artifact
         uses: actions/download-artifact@v7
         with:
-          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          name: oasisic-openwrt-${{ needs.build.outputs.owrt_ver_safe }}
+          path: firmware/
+
+      - name: 📦 安装 QEMU + OVMF
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86-64 ovmf
+
+      - name: 🚀 QEMU 烟雾测试
+        run: |
+          set -euo pipefail
+
+          FIRMWARE_GZ="$(find firmware/ -name '*-squashfs-combined-efi.img.gz' -type f 2>/dev/null | head -1)"
+          if [ -z "$FIRMWARE_GZ" ]; then
+            FIRMWARE_GZ="$(find firmware/ -name '*-squashfs-combined.img.gz' -type f 2>/dev/null | head -1)"
+          fi
+          if [ -z "$FIRMWARE_GZ" ]; then
+            echo "❌ 未找到固件镜像"
+            ls -la firmware/ 2>/dev/null || true
+            exit 1
+          fi
+
+          gunzip -k -f "$FIRMWARE_GZ"
+          IMG="${FIRMWARE_GZ%.gz}"
+          echo "📦 固件: $(basename "$IMG") ($(du -h "$IMG" | cut -f1))"
+
+          OVMF_CODE=""
+          for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          if [ -z "$OVMF_CODE" ]; then
+            echo "❌ 未找到 OVMF UEFI 固件"
+            exit 1
+          fi
+          echo "🔧 OVMF: $OVMF_CODE"
+
+          BOOT_LOG="/tmp/boot.log"
+          OVMF_VARS="/tmp/ovmf_vars.fd"
+          cp "$(dirname "$OVMF_CODE")/OVMF_VARS_4M.fd" "$OVMF_VARS" 2>/dev/null || \
+            cp "$(dirname "$OVMF_CODE")/OVMF_VARS.fd" "$OVMF_VARS" 2>/dev/null || \
+            touch "$OVMF_VARS"
+
+          timeout 300 qemu-system-x86_64 \
+            -m 256 -machine q35 -nographic \
+            -serial "file:${BOOT_LOG}" \
+            -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+            -drive if=pflash,format=raw,file="$OVMF_VARS" \
+            -drive file="$IMG",format=raw,if=virtio \
+            -netdev user,id=net0,hostfwd=tcp::8080-:80 \
+            -device virtio-net-pci,netdev=net0 \
+            -no-reboot >/dev/null 2>&1 &
+          QEMU_PID=$!
+
+          START_TS=$(date +%s)
+          LUCI_OK=false
+          TIMEOUT=300
+          while [ $(( $(date +%s) - $START_TS )) -lt $TIMEOUT ]; do
+            if grep -qiE '(kernel panic|Oops|BUG:|unable to handle kernel)' "$BOOT_LOG" 2>/dev/null; then
+              echo "❌ 内核异常！"
+              grep -iE '(kernel panic|Oops|BUG:|unable to handle kernel)' "$BOOT_LOG" | tail -5
+              kill $QEMU_PID 2>/dev/null || true
+              exit 1
+            fi
+            if curl -sf -o /dev/null http://127.0.0.1:8080/ 2>/dev/null; then
+              echo "✅ LuCI 首页响应 200"
+              LUCI_OK=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$LUCI_OK" != "true" ]; then
+            echo "❌ 超时: LuCI 未在 ${TIMEOUT}s 内响应"
+            tail -50 "$BOOT_LOG" 2>/dev/null || true
+            kill $QEMU_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "🎉 QEMU 烟雾测试通过"
+          kill $QEMU_PID 2>/dev/null || true
+          rm -f "$IMG" "$BOOT_LOG"
+
+  # ─── Job 4: 发布 Release ────────────────────────────────────────────────
+  release:
+    needs: qemu-smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 📥 下载固件 Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: oasisic-openwrt-${{ needs.build.outputs.owrt_ver_safe }}
           path: release-artifacts/
 
       - name: 🏷️ 生成 Release body
         run: |
-          NV="${{ steps.nikki-version.outputs.nikki_version_actual }}"
-          KV="${{ steps.kernel-version.outputs.kernel_version }}"
-          PW="${{ steps.gen-pass.outputs.root_password }}"
+          NV="${{ needs.build.outputs.nikki_version_actual }}"
+          KV="${{ needs.build.outputs.kernel_version }}"
+          PW="${{ needs.build.outputs.root_password }}"
           cat > release-body.md << RELEASEEOF
           ## 🏝️ Oasisic OpenWrt 自动构建
 
           | 项 | 值 |
           |----|-----|
-          | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
+          | OpenWrt 版本 | ${{ needs.build.outputs.owrt_version }} |
           | Nikki 版本 | ${NV} |
           RELEASEEOF
           if [ -n "$KV" ] && [ "$KV" != "?" ]; then
@@ -335,7 +427,7 @@ jobs:
           | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
 
           ### 🔑 登录信息
-          - **主机名**: ${{ needs.check-upstream.outputs.owrt_version }}
+          - **主机名**: ${{ needs.build.outputs.owrt_version }}
           - **用户名**: root
           - **密码**: \`${PW}\`
           - **首次开机**: DHCP 自动获取 IP（到主路由查看）
@@ -351,12 +443,8 @@ jobs:
           - \`squashfs-combined-efi.img.gz\` — EFI 启动 (推荐 PVE UEFI)
           - \`squashfs-combined.img.gz\` — BIOS 启动
           - \`image.iso\` — ISO 镜像
-          - \`feeds.conf.default\` — 编译源列表
-          - \`sha256sums\` — 固件校验和
-          - \`sha256sums.minisig\` — minisign 签名
+          - \`sha256sums\` — 固件校验和 + minisign 签名
           - \`config.buildinfo\` — 编译配置
-          - \`profiles.json\` — 目标架构
-          - \`manifest\` — 包列表
 
           ### 🔑 首次使用
           1. PVE 导入磁盘（见 README）
@@ -368,8 +456,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
-          name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          tag_name: oasisic-${{ needs.build.outputs.owrt_ver_safe }}
+          name: 🏝️ Oasisic OpenWrt ${{ needs.build.outputs.owrt_ver_safe }}
           fail_on_unmatched_files: false
           make_latest: true
           generate_release_notes: false
@@ -389,12 +477,12 @@ jobs:
         if: success()
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
-          NIKKI_VER: ${{ steps.nikki-version.outputs.nikki_version_actual }}
-          KERNEL_VER: ${{ steps.kernel-version.outputs.kernel_version }}
-          ROOT_PASS: ${{ steps.gen-pass.outputs.root_password }}
-          TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          OWRT_VER: ${{ needs.build.outputs.owrt_version }}
+          NIKKI_VER: ${{ needs.build.outputs.nikki_version_actual }}
+          KERNEL_VER: ${{ needs.build.outputs.kernel_version }}
+          ROOT_PASS: ${{ needs.build.outputs.root_password }}
+          TAG: oasisic-${{ needs.build.outputs.owrt_ver_safe }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.build.outputs.owrt_ver_safe }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
         run: python3 scripts/notify-discord.py
 

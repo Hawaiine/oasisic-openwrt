@@ -28,7 +28,6 @@ CONFIG_TARGET_IMAGES_GZIP=y
 CONFIG_LUCI_LANG_zh_Hans=y
 
 # ─── 语言包 ────────────────────────────────────────────
-CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-nikki-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
@@ -53,6 +52,10 @@ CONFIG_PACKAGE_nftables=y
 CONFIG_PACKAGE_ip-full=y
 CONFIG_PACKAGE_yq=y
 CONFIG_PACKAGE_cgi-io=y
+
+# ─── IPv6 ─────────────────────────────────────────────
+CONFIG_PACKAGE_odhcp6c=y
+CONFIG_PACKAGE_luci-proto-ipv6=y
 
 # ─── Nikki 代理（从 feeds 编译） ─────────────────────────
 CONFIG_PACKAGE_nikki=y
@@ -80,24 +83,18 @@ CONFIG_PACKAGE_kmod-virtio-rng=y
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-light=y
 CONFIG_PACKAGE_luci-base=y
-CONFIG_PACKAGE_luci-compat=y
 CONFIG_PACKAGE_luci-lib-uqr=y
 CONFIG_PACKAGE_luci-lua-runtime=y
 CONFIG_PACKAGE_luci-mod-admin-full=y
 CONFIG_PACKAGE_luci-mod-network=y
 CONFIG_PACKAGE_luci-mod-status=y
 CONFIG_PACKAGE_luci-mod-system=y
-CONFIG_PACKAGE_luci-proto-ipv6=y
 CONFIG_PACKAGE_luci-proto-ppp=y
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-app-filemanager=y
 CONFIG_PACKAGE_luci-app-package-manager=y
-CONFIG_PACKAGE_luci-app-statistics=y
-CONFIG_PACKAGE_luci-app-attendedsysupgrade=y
 
 # ─── 主题 ──────────────────────────────────────────────
-CONFIG_PACKAGE_luci-theme-argon=y
-CONFIG_PACKAGE_luci-app-argon-config=y
 CONFIG_PACKAGE_luci-theme-bootstrap=y
 
 # ─── RPCD ──────────────────────────────────────────────
@@ -107,8 +104,10 @@ CONFIG_PACKAGE_rpcd-mod-iwinfo=y
 CONFIG_PACKAGE_rpcd-mod-luci=y
 CONFIG_PACKAGE_rpcd-mod-rrdns=y
 CONFIG_PACKAGE_rpcd-mod-ucode=y
+CONFIG_PACKAGE_ucode=y
 CONFIG_PACKAGE_ucode-mod-html=y
 CONFIG_PACKAGE_ucode-mod-log=y
+CONFIG_PACKAGE_ucode-mod-json=y
 CONFIG_PACKAGE_ucode-mod-lua=y
 CONFIG_PACKAGE_ucode-mod-math=y
 

@@ -77,7 +77,13 @@
 - 首次启动标记 `/etc/.oasisic-firstboot` 控制访问
 - 设置完成后 CGI 自禁用（chmod 000）
 - IPv4 格式校验 + 端口范围校验 + 密码一致性校验
+- CGI 使用 OpenWrt 内置 `jshn`（`/usr/share/libubox/jshn.sh`）解析 JSON，避免 sed 手工解析导致的转义安全问题
 - 跳过模式：只清标记不改配置
+
+> ⚠️ **Fork 安全提示：** 仓库中 `files/etc/shadow` 使用的是锁定态 hash（`root:*:`），
+> CI 编译时会自动生成随机密码覆盖。如果你 fork 后手动编译（不走 CI），
+> **务必先用 `openssl passwd -6` 生成你自己的 hash 替换 shadow 文件**，
+> 否则 root 账户将无法密码登录。
 
 ---
 
@@ -149,7 +155,7 @@ oasisic-openwrt/
 │   │   │   ├── system            ← hostname / NTP / 时区
 │   │   │   └── dhcp              ← dnsmasq + IPv6 中继
 │   │   ├── banner                ← OpenWrt 官方 logo
-│   │   ├── shadow                ← 随机密码模板
+│   │   ├── shadow                ← 锁定态密码模板（CI 编译时自动覆盖）
 │   │   └── uci-defaults/
 │   │       └── 99-custom         ← 首次启动配置脚本
 │   └── usr/lib/oasisic/

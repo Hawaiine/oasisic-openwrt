@@ -315,7 +315,7 @@ jobs:
       - name: 📥 下载固件 Artifact
         uses: actions/download-artifact@v7
         with:
-          name: oasisic-openwrt-${{ needs.build.outputs.owrt_ver_safe }}
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           path: firmware/
 
       - name: 📦 安装 QEMU + OVMF
@@ -407,7 +407,7 @@ jobs:
       - name: 📥 下载固件 Artifact
         uses: actions/download-artifact@v7
         with:
-          name: oasisic-openwrt-${{ needs.build.outputs.owrt_ver_safe }}
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           path: release-artifacts/
 
       - name: 🏷️ 生成 Release body
@@ -420,7 +420,7 @@ jobs:
 
           | 项 | 值 |
           |----|-----|
-          | OpenWrt 版本 | ${{ needs.build.outputs.owrt_version }} |
+          | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
           | Nikki 版本 | ${NV} |
           RELEASEEOF
           if [ -n "$KV" ] && [ "$KV" != "?" ]; then
@@ -431,7 +431,7 @@ jobs:
           | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
 
           ### 🔑 登录信息
-          - **主机名**: ${{ needs.build.outputs.owrt_version }}
+          - **主机名**: ${{ needs.check-upstream.outputs.owrt_version }}
           - **用户名**: root
           - **密码**: \`${PW}\`
           - **首次开机**: DHCP 自动获取 IP（到主路由查看）
@@ -460,8 +460,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: oasisic-${{ needs.build.outputs.owrt_ver_safe }}
-          name: 🏝️ Oasisic OpenWrt ${{ needs.build.outputs.owrt_ver_safe }}
+          tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }}
           fail_on_unmatched_files: false
           make_latest: true
           generate_release_notes: false
@@ -481,12 +481,12 @@ jobs:
         if: success()
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          OWRT_VER: ${{ needs.build.outputs.owrt_version }}
+          OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
           NIKKI_VER: ${{ needs.build.outputs.nikki_version_actual }}
           KERNEL_VER: ${{ needs.build.outputs.kernel_version }}
           ROOT_PASS: ${{ needs.build.outputs.root_password }}
-          TAG: oasisic-${{ needs.build.outputs.owrt_ver_safe }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.build.outputs.owrt_ver_safe }}
+          TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
         run: python3 scripts/notify-discord.py
 

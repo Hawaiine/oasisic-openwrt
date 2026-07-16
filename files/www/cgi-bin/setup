@@ -18,15 +18,20 @@ if [ -z "$INPUT" ]; then
     exit 0
 fi
 
-# 用 sed 逐字段提取 JSON 值
-lanIp=$(echo "$INPUT" | sed -n 's/.*"lanIp"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-port=$(echo "$INPUT" | sed -n 's/.*"port"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-mask=$(echo "$INPUT" | sed -n 's/.*"mask"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-gw=$(echo "$INPUT" | sed -n 's/.*"gw"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-dns1=$(echo "$INPUT" | sed -n 's/.*"dns1"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-dns2=$(echo "$INPUT" | sed -n 's/.*"dns2"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-password=$(echo "$INPUT" | sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-skip=$(echo "$INPUT" | sed -n 's/.*"skip"[[:space:]]*:[[:space:]]*\(true\).*/\1/p')
+# 用 jshn 解析 JSON（OpenWrt 内置，来自 libubox）
+. /usr/share/libubox/jshn.sh
+json_load "$INPUT" || {
+    echo '{"success":false,"error":"JSON 解析失败"}'
+    exit 0
+}
+json_get_var lanIp lanIp
+json_get_var port port
+json_get_var mask mask
+json_get_var gw gw
+json_get_var dns1 dns1
+json_get_var dns2 dns2
+json_get_var password password
+json_get_var skip skip
 
 # ---- 跳过模式：清除标记 + 自禁用（不改配置）----
 if [ "$skip" = "true" ]; then

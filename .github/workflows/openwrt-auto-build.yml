@@ -306,7 +306,7 @@ jobs:
 
   # ─── Job 3: QEMU 烟雾测试 ────────────────────────────────────────────────
   qemu-smoke-test:
-    needs: build
+    needs: [check-upstream, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -399,7 +399,7 @@ jobs:
 
   # ─── Job 4: 发布 Release ────────────────────────────────────────────────
   release:
-    needs: qemu-smoke-test
+    needs: [check-upstream, qemu-smoke-test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

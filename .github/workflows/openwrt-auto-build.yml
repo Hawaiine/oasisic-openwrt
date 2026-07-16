@@ -409,7 +409,7 @@ jobs:
           - **主题**: luci-theme-bootstrap
           - **PVE**: qemu-ga + virtio 全系驱动
           - **DNS**: dnsmasq-full (dhcp/dnssec/nftset/dhcpv6)
-          - **工具**: bash, curl, wget, yq, htop, iperf3, tcpdump, vim
+          - **工具**: bash, curl, wget, yq, htop, tcpdump, vim
 
           ### 📥 下载
           - \`squashfs-combined-efi.img.gz\` — EFI 启动 (推荐 PVE UEFI)

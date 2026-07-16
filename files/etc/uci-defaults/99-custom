@@ -12,6 +12,23 @@ uci set luci.main.resourcebase='/luci-static/resources'
 uci set luci.title.title='Oasisic OpenWrt'
 uci commit luci
 
+# ---- 默认 DHCP 客户端（无静态 IP）----
+uci set network.lan.proto='dhcp'
+
+# ---- IPv6 DNS（国内常用）----
+uci add_list network.lan.dns='2400:3200::1'
+uci add_list network.lan.dns='2402:4e00::6666'
+
+# ---- IPv6 委派默认关闭（旁路网关不向下分发 IPv6）----
+uci set network.lan.delegate='0'
+
+# ---- 旁路网关 IPv6 中继模式 ----
+uci set dhcp.lan.dhcpv6='hybrid'
+uci set dhcp.lan.ra='hybrid'
+uci set dhcp.lan.ndp='relay'
+
+uci commit
+
 # ---- 确保 QEMU Guest Agent 启动 ----
 if [ -x /etc/init.d/qemu-ga ]; then
     /etc/init.d/qemu-ga enable

@@ -752,14 +752,37 @@ function applyConfig(skip) {
       document.querySelector('.step-item[data-step="3"]').classList.add('done');
       var final = document.createElement('div');
       final.className = 'step-panel active';
+      var newIp = data.new_ip || config.lanIp;
+      var newPort = data.new_port || (config.port || '80');
       final.innerHTML = '<div class="step3-content">' +
         '<div class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#1db954" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
         '<h2>设置完成 🎉</h2>' +
-        '<p>配置已应用，设备正在重启网络服务。<br>请使用新 IP 地址 <strong>' + config.lanIp + '</strong> 访问管理界面。</p>' +
-        '<p style="font-size:12px; color:#888; margin-top:8px;">跳转中…</p></div>';
+        '<p>配置已应用，设备正在重启网络服务。</p>' +
+        '<p>正在连接新地址 <strong>' + newIp + ':' + newPort + '</strong>…</p>' +
+        '<p id="pollStatus" style="font-size:12px; color:#888; margin-top:8px;">等待设备响应中</p></div>';
       document.querySelector('.form-area').appendChild(final);
-      setTimeout(function() {
-        window.location.href = 'http://' + config.lanIp + ':' + (config.port||'80') + '/cgi-bin/luci';
+      // 轮询新地址，替代固定 3 秒跳转
+      var pollUrl = 'http://' + newIp + ':' + newPort + '/cgi-bin/luci';
+      var pollStart = Date.now();
+      var pollTimeout = 60000; // 60 秒超时
+      var pollTimer = setInterval(function() {
+        var elapsed = Math.floor((Date.now() - pollStart) / 1000);
+        document.getElementById('pollStatus').textContent = '已等待 ' + elapsed + ' 秒…';
+        if (elapsed > pollTimeout / 1000) {
+          clearInterval(pollTimer);
+          document.getElementById('pollStatus').innerHTML =
+            '⚠️ 无法连接到新地址。请手动访问 <a href="' + pollUrl + '">' + pollUrl + '</a>。' +
+            '<br><small>如需恢复旧配置，请访问 <a href="/cgi-bin/setup-rollback">回滚页面</a></small>';
+          return;
+        }
+        var img = new Image();
+        img.onload = function() {
+          clearInterval(pollTimer);
+          document.getElementById('pollStatus').textContent = '✅ 已连接，正在跳转…';
+          window.location.href = pollUrl;
+        };
+        img.onerror = function() { /* 继续轮询 */ };
+        img.src = pollUrl + '?_t=' + Date.now();
       }, 3000);
     } else {
       document.getElementById('errorMsg').textContent = data.error || '未知错误，请稍后重试。';

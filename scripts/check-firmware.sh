@@ -42,6 +42,39 @@ echo "◆ Tier 1: APK 完整性检查（信息级）"
 LUCI_APK=$(find "${PKG_DIR}" -name "luci-base*.apk" -o -name "luci-base_*.ipk" 2>/dev/null | head -1)
 check "luci-base 包存在" $([ -n "$LUCI_APK" ]; echo $?)
 
+# 1.1a APK 迁移期检查：确认包格式一致性（25.12 应全为 .apk 或全为 .ipk）
+echo "  --- APK 迁移期检查 ---"
+APK_COUNT=$(find "${PKG_DIR}" -name "*.apk" -type f 2>/dev/null | wc -l)
+IPK_COUNT=$(find "${PKG_DIR}" -name "*.ipk" -type f 2>/dev/null | wc -l)
+if [ "$APK_COUNT" -gt 0 ] && [ "$IPK_COUNT" -gt 0 ]; then
+  echo "  ⚠️  混用包格式: ${APK_COUNT} 个 .apk + ${IPK_COUNT} 个 .ipk（可能引发依赖解析问题）"
+  WARN=$((WARN + 1))
+elif [ "$APK_COUNT" -gt 0 ]; then
+  echo "  ✅ 纯 APK 格式: ${APK_COUNT} 个包（25.12 标准）"
+  PASS=$((PASS + 1))
+else
+  echo "  ✅ 纯 IPK 格式: ${IPK_COUNT} 个包（旧版兼容）"
+  PASS=$((PASS + 1))
+fi
+
+# 1.1b 检查 APK INDEX 存在（APK 仓库数据库完整性）
+if [ "$APK_COUNT" -gt 0 ]; then
+  APK_INDEX=$(find "${PKG_DIR}" -name "APKINDEX.tar.gz" -type f 2>/dev/null | head -1)
+  if [ -n "$APK_INDEX" ]; then
+    # 验证 APKINDEX 可解压
+    if tar -tzf "$APK_INDEX" >/dev/null 2>&1; then
+      echo "  ✅ APKINDEX.tar.gz 存在且可解压"
+      PASS=$((PASS + 1))
+    else
+      echo "  ⚠️  APKINDEX.tar.gz 损坏（无法解压）"
+      WARN=$((WARN + 1))
+    fi
+  else
+    echo "  ⚠️  APKINDEX.tar.gz 不存在（APK 仓库无数据库）"
+    WARN=$((WARN + 1))
+  fi
+fi
+
 if [ -n "$LUCI_APK" ]; then
     TMPDIR=$(mktemp -d)
 

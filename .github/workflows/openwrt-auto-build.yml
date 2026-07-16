@@ -282,6 +282,10 @@ jobs:
           echo "=== 固件镜像 ==="
           ls -lh "${{ env.BUILD_DIR }}/bin/targets/x86/64/"*.img.gz 2>/dev/null || echo "(无)"
 
+      - name: 📝 文档一致性检查
+        run: |
+          bash scripts/check-docs-consistency.sh
+
       - name: 💾 保存版本标识
         run: |
           echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ steps.kernel-version.outputs.kernel_version }}" \

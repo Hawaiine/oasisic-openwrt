@@ -247,6 +247,25 @@ qm start 100
 
 ---
 
+## 📜 版本历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-16 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
+
+**里程碑 v1.0.0 涵盖：**
+
+| 阶段 | 内容 |
+|------|------|
+| 🔷 一 | 基础系统配置（网络/防火墙/DHCP/NTP/Feeds/包选择/编译优化） |
+| 🔷 二 | 首次启动设置向导（状态机/检测页/CGI 前后端/自禁用） |
+| 🔷 三 | CI/CD 流水线（4 站式/上游检测/QEMU 烟雾测试/minisign/通知） |
+| 🔷 四 | OpenWrt 25.12 APK 适配 + 最终打磨（ucode 修复/CI 修复/清理） |
+
+> 后续版本跟随上游 OpenWrt / Nikki tag 自动发布，详见 [Releases](https://github.com/Hawaiine/oasisic-openwrt/releases)。
+
+---
+
 ## 📜 许可证
 
 [GNU General Public License v2](LICENSE) — 与 OpenWrt 项目保持一致。

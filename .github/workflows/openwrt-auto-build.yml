@@ -23,7 +23,7 @@ env:
   LAST_VERSION_FILE: last_build_version
   BUILD_DIR: openwrt
   CCACHE_DIR: /tmp/.ccache
-  MAKE_JOBS: 2                        # GitHub Actions 免费 runner 2 核
+  MAKE_JOBS: 4                        # GitHub Actions 免费 runner 2 核 4 线程
 
 jobs:
   # ─── Job 1: 检测上游 ─────────────────────────────────────────────────────

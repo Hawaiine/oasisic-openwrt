@@ -260,6 +260,10 @@ jobs:
           echo "✅ 清理完成"
 
       - name: 🔏 固件签名（minisign）
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_KEY_ID: ${{ secrets.MINISIGN_KEY_ID }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: |
           pip install pynacl -q
           bash scripts/minisign-sign.sh "${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums"

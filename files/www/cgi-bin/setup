@@ -31,10 +31,15 @@ skip=$(echo "$INPUT" | sed -n 's/.*"skip"[[:space:]]*:[[:space:]]*\(true\).*/\1/
 # ---- 跳过模式：清除标记 + 自禁用（不改配置）----
 if [ "$skip" = "true" ]; then
     oasisic_clear_firstboot /www/cgi-bin/setup
-    /etc/init.d/uhttpd restart 2>/dev/null &
+    # 用 setsid 脱离 uhttpd 进程组，避免 procd 整组 kill 时被误杀
+    setsid sh -c 'sleep 2 && /etc/init.d/uhttpd restart' 2>/dev/null &
     echo '{"success":true,"mode":"skip"}'
     exit 0
 fi
+
+# 保存原始网络配置，用于回滚
+uci show network.lan > /tmp/.setup-original 2>/dev/null || true
+uci show uhttpd.main > /tmp/.setup-original-uhttpd 2>/dev/null || true
 
 # 校验必填字段
 if [ -z "$lanIp" ] || [ -z "$port" ] || [ -z "$mask" ] || [ -z "$gw" ]; then
@@ -135,8 +140,8 @@ fi
 # 清除首次启动标记 + 自禁用
 oasisic_clear_firstboot /www/cgi-bin/setup
 
-# 重启网络和服务
-/etc/init.d/network reload 2>/dev/null &
-/etc/init.d/uhttpd restart 2>/dev/null &
+# 先输出响应（含新 IP/端口，供客户端轮询），再用 setsid 异步重启
+echo "{\"success\":true,\"new_ip\":\"$lanIp\",\"new_port\":$port}"
 
-echo '{"success":true}'
+# 异步重启（脱离 uhttpd 进程组）
+setsid sh -c 'sleep 2 && /etc/init.d/network reload && /etc/init.d/uhttpd restart' 2>/dev/null &

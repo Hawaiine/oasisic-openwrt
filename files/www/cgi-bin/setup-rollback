@@ -1,0 +1,9 @@
+#!/bin/sh
+# Oasisic OpenWrt — 设置回滚 CGI
+# 手动触发：访问 /cgi-bin/setup-rollback 回滚到配置前的网络状态
+
+echo "Content-Type: application/json"
+echo ""
+
+. /usr/lib/oasisic/firstboot.sh
+. /usr/lib/oasisic/setup-rollback.sh

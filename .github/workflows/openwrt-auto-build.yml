@@ -393,6 +393,41 @@ jobs:
             exit 1
           fi
 
+          # ─── LuCI JS 资源完整性检查 ──────────────────────────
+          echo "🔍 检查 LuCI JS 资源..."
+          JS_CHECK_FAIL=false
+          for js_url in \
+            "http://127.0.0.1:8080/luci-static/resources/luci.js" \
+            "http://127.0.0.1:8080/luci-static/resources/ui.js" \
+            "http://127.0.0.1:8080/luci-static/resources/cbi.js"; do
+            JS_NAME=$(basename "$js_url")
+            JS_CONTENT=$(curl -sL "$js_url" 2>/dev/null || true)
+            JS_SIZE=${#JS_CONTENT}
+
+            if [ "$JS_SIZE" -lt 100 ]; then
+              echo "❌ ${JS_NAME}: 内容过短 (${JS_SIZE} bytes)，可能缺失或 404"
+              JS_CHECK_FAIL=true
+              continue
+            fi
+
+            # 检查是否被当作 gzip 二进制流输出（前 2 字节为 0x1f 0x8b）
+            FIRST_BYTES=$(printf '%s' "$JS_CONTENT" | od -A n -t x1 | head -1 | tr -d ' ')
+            if echo "$FIRST_BYTES" | grep -q '^1f8b'; then
+              echo "❌ ${JS_NAME}: 以 gzip 压缩二进制输出（uhttpd 未解压 .js.gz）"
+              JS_CHECK_FAIL=true
+              continue
+            fi
+
+            echo "✅ ${JS_NAME}: ${JS_SIZE} bytes, 非 gzip 二进制"
+          done
+
+          if [ "$JS_CHECK_FAIL" = "true" ]; then
+            echo "❌ JS 资源检查失败，终止"
+            kill $QEMU_PID 2>/dev/null || true
+            exit 1
+          fi
+          echo "✅ LuCI JS 资源完整性检查通过"
+
           echo "🎉 QEMU 烟雾测试通过"
           kill $QEMU_PID 2>/dev/null || true
           rm -f "$IMG" "$BOOT_LOG"

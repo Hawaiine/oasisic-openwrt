@@ -38,10 +38,11 @@
 | 🧹 **纯净安全** | 官方源检查 | 仅官方 feeds + Nikki，GitHub 镜像锁定分支 |
 | 🔐 **ucode** | LuCI 基础依赖 | 修复 LuCI CGI 403 |
 | 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，国内连通性优化 |
-| 🧭 **设置向导** | 首次启动 | 纯 HTML/CSS/JS 向导，零外部依赖 |
-| 🧪 **烟雾测试** | QEMU | 固件构建后自动启动验证 LuCI |
+| 🧭 **设置向导** | 首次启动 | 纯 HTML/CSS/JS 向导，零外部依赖，60s 轮询确认 + 回滚保护 |
+| 🧪 **烟雾测试** | QEMU + LuCI + JS | 固件构建后自动启动，验证 LuCI + JS 资源完整性 |
 | 🔏 **签名验证** | minisign | 固件完整性签名 + 用户验证指南 |
 | 🧹 **自动清理** | Actions 缓存 | 每 3 天清理失败运行 + 过期缓存 |
+| 🤖 **文档校验** | CI 自动 | 对比 README 声称功能与 gen-config.sh 实际配置 |
 
 ---
 
@@ -103,15 +104,17 @@ check-upstream
         ├── 🏗️ 编译（失败时自动 verbose 重跑）
         ├── 📊 ccache 统计
         ├── 🔏 minisign 签名
-        ├── 📋 check-firmware.sh 自检
+        ├── 📋 check-firmware.sh 自检（含 APK 迁移期检查）
+        ├── 📝 文档一致性检查（README vs gen-config.sh）
         └── 📤 上传 Artifact
               │
               ▼
         qemu-smoke-test（阻断门）
               │
               ├── ❌ QEMU 启动失败 → 终止
+              ├── ❌ JS 资源异常（luci.js/ui.js/cbi.js）→ 终止
               │
-              └── ✅ LuCI 响应 200 → release job
+              └── ✅ LuCI 响应 200 + JS 完整性通过 → release job
                     │
                     ├── 🚀 发布 GitHub Release（含随机密码）
                     └── 📢 Discord 通知
@@ -139,20 +142,26 @@ oasisic-openwrt/
 │   └── minisign.pub                 ← 固件签名公钥
 │
 ├── files/                        ← 注入固件的自定义文件
-│   └── etc/
-│       ├── config/
-│       │   ├── network           ← LAN DHCP（首次开机自动获取 IP）
-│       │   ├── firewall          ← 旁路网关全 ACCEPT 规则
-│       │   ├── system            ← hostname / NTP / 时区
-│       │   └── dhcp              ← dnsmasq + IPv6 中继
-│       ├── banner                ← OpenWrt 官方 logo + Oasisic 品牌
-│       └── uci-defaults/
-│           └── 99-custom         ← 首次启动配置脚本
+│   ├── etc/
+│   │   ├── config/
+│   │   │   ├── network           ← LAN DHCP（首次开机自动获取 IP）
+│   │   │   ├── firewall          ← 旁路网关全 ACCEPT 规则
+│   │   │   ├── system            ← hostname / NTP / 时区
+│   │   │   └── dhcp              ← dnsmasq + IPv6 中继
+│   │   ├── banner                ← OpenWrt 官方 logo
+│   │   ├── shadow                ← 随机密码模板
+│   │   └── uci-defaults/
+│   │       └── 99-custom         ← 首次启动配置脚本
+│   └── usr/lib/oasisic/
+│       ├── firstboot.sh          ← 首次启动状态机共享库
+│       └── setup-rollback.sh     ← 设置向导回滚脚本
 │
 ├── scripts/
 │   ├── gen-config.sh             ← 包配置生成器（明确声明所有包）
 │   ├── gen-feeds-conf.sh         ← 动态 feeds.conf 生成器
-│   ├── check-firmware.sh         ← 固件完整性自检
+│   ├── check-firmware.sh         ← 固件完整性自检（含 APK 迁移期检查）
+│   ├── check-docs-consistency.sh ← 文档一致性校验
+│   ├── minisign-sign.sh          ← 固件签名脚本
 │   └── notify-discord.py         ← Discord 通知
 │
 ├── feeds.conf                    ← 官方 GitHub 镜像 + 分支锁定
@@ -251,16 +260,16 @@ qm start 100
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-16 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
+| [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-16 | 🏝️ **正式发布** — 四阶段全部完成，全自动 CI/CD + 首次启动设置向导 + 固件签名 + 文档校验 |
 
-**里程碑 v1.0.0 涵盖：**
+**v1.0.0 涵盖：**
 
 | 阶段 | 内容 |
 |------|------|
 | 🔷 一 | 基础系统配置（网络/防火墙/DHCP/NTP/Feeds/包选择/编译优化） |
-| 🔷 二 | 首次启动设置向导（状态机/检测页/CGI 前后端/自禁用） |
-| 🔷 三 | CI/CD 流水线（4 站式/上游检测/QEMU 烟雾测试/minisign/通知） |
-| 🔷 四 | OpenWrt 25.12 APK 适配 + 最终打磨（ucode 修复/CI 修复/清理） |
+| 🔷 二 | 首次启动设置向导（状态机/检测页/CGI 前后端/轮询确认/回滚保护） |
+| 🔷 三 | CI/CD 流水线（4 站式/上游检测/QEMU 烟雾测试+JS 检查/minisign/文档校验） |
+| 🔷 四 | OpenWrt 25.12 APK 适配 + 最终打磨（ucode 修复/APK 迁移期检查/CI 修复） |
 
 > 后续版本跟随上游 OpenWrt / Nikki tag 自动发布，详见 [Releases](https://github.com/Hawaiine/oasisic-openwrt/releases)。
 

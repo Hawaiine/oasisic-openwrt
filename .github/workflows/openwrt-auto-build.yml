@@ -415,7 +415,7 @@ jobs:
             fi
 
             # 检查是否被当作 gzip 二进制流输出（前 2 字节为 0x1f 0x8b）
-            FIRST_BYTES=$(printf '%s' "$JS_CONTENT" | od -A n -t x1 | head -1 | tr -d ' ')
+            FIRST_BYTES=$(printf '%s' "$JS_CONTENT" | head -c 20 | od -A n -t x1 | tr -d ' ')
             if echo "$FIRST_BYTES" | grep -q '^1f8b'; then
               echo "❌ ${JS_NAME}: 以 gzip 压缩二进制输出（uhttpd 未解压 .js.gz）"
               JS_CHECK_FAIL=true

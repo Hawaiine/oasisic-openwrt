@@ -13,6 +13,17 @@ if [ ! -f "$ORIG_NET" ]; then
     exit 0
 fi
 
+# 有效期检查：备份文件超过 30 分钟视为过期
+# 配置刚写完时用户在轮询阶段点击回滚才有意义
+# 时间长了网络可能已有其他变化，回滚风险大于收益
+NOW=$(date +%s)
+MTIME=$(stat -c %Y "$ORIG_NET" 2>/dev/null || echo 0)
+AGE=$(( (NOW - MTIME) / 60 ))
+if [ "$AGE" -ge 30 ]; then
+    echo '{"success":false,"error":"回滚链接已过期（超过 30 分钟），如需恢复请重启设备"}'
+    exit 0
+fi
+
 # 从保存的配置中提取原始 proto
 OLD_PROTO=$(grep 'network.lan.proto=' "$ORIG_NET" 2>/dev/null | head -1 | cut -d"'" -f2)
 OLD_IP=$(grep 'network.lan.ipaddr=' "$ORIG_NET" 2>/dev/null | head -1 | cut -d"'" -f2)

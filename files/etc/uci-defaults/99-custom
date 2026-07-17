@@ -1,16 +1,16 @@
 #!/bin/sh
 # Oasisic OpenWrt — 首次启动补丁
-# 仅处理 files/etc/config/ 无法覆盖的逻辑
+# 创建 .oasisic-firstboot 标记，让 index.html 跳转到设置向导
 
-# ---- 设置 LuCI 语言 & 主题（config 文件可能被 uci-defaults 覆盖）----
+# ---- 创建首次启动标记（设置向导用）----
+touch /etc/.oasisic-firstboot
+
+# ---- 设置 LuCI 语言 & 主题 & 资源路径（bootstrap 默认）----
 uci set luci.main.lang='zh-cn'
-uci set luci.main.mediaurlbase='/luci-static/argon'
+uci set luci.main.mediaurlbase='/luci-static/bootstrap'
+uci set luci.main.resourcebase='/luci-static/resources'
+uci set luci.title.title='Oasisic OpenWrt'
 uci commit luci
-
-# ---- Argon 主题品牌名 ----
-uci set argon.global.brand='Oasisic OpenWrt'
-uci set argon.global.hide_background='0'
-uci commit argon
 
 # ---- 确保 QEMU Guest Agent 启动 ----
 if [ -x /etc/init.d/qemu-ga ]; then

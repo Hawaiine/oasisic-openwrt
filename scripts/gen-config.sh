@@ -81,7 +81,6 @@ CONFIG_PACKAGE_kmod-virtio-rng=y
 
 # ─── LuCI 核心 ──────────────────────────────────────────
 CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-light=y
 CONFIG_PACKAGE_luci-base=y
 CONFIG_PACKAGE_luci-lib-uqr=y
 CONFIG_PACKAGE_luci-lua-runtime=y

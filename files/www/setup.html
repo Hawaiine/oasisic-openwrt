@@ -772,17 +772,17 @@ function applyConfig(skip) {
           clearInterval(pollTimer);
           document.getElementById('pollStatus').innerHTML =
             '⚠️ 无法连接到新地址。请手动访问 <a href="' + pollUrl + '">' + pollUrl + '</a>。' +
-            '<br><small>如需恢复旧配置，请访问 <a href="/cgi-bin/setup-rollback">回滚页面</a></small>';
+            '<br><small>如需恢复旧配置，请访问 <a href="http://' + newIp + ':' + newPort + '/cgi-bin/setup-rollback">回滚页面</a>。' +
+            '<br>⚠️ 如果新地址也无法访问（如网关/掩码设置错误），设备可能完全离线，请通过物理串口或直连旧地址的路由器手动恢复。</small>';
           return;
         }
-        var img = new Image();
-        img.onload = function() {
-          clearInterval(pollTimer);
-          document.getElementById('pollStatus').textContent = '✅ 已连接，正在跳转…';
-          window.location.href = pollUrl;
-        };
-        img.onerror = function() { /* 继续轮询 */ };
-        img.src = pollUrl + '?_t=' + Date.now();
+        fetch(pollUrl, { mode: 'no-cors', cache: 'no-store' })
+          .then(function() {
+            clearInterval(pollTimer);
+            document.getElementById('pollStatus').textContent = '✅ 已连接，正在跳转…';
+            window.location.href = pollUrl;
+          })
+          .catch(function() { /* 继续轮询 */ });
       }, 3000);
     } else {
       document.getElementById('errorMsg').textContent = data.error || '未知错误，请稍后重试。';

@@ -36,6 +36,7 @@ json_get_var skip skip
 # ---- 跳过模式：清除标记 + 自禁用（不改配置）----
 if [ "$skip" = "true" ]; then
     oasisic_clear_firstboot /www/cgi-bin/setup
+    uci commit luci
     # 用 setsid 脱离 uhttpd 进程组，避免 procd 整组 kill 时被误杀
     setsid sh -c 'sleep 2 && /etc/init.d/uhttpd restart' 2>/dev/null &
     echo '{"success":true,"mode":"skip"}'

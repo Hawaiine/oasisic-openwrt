@@ -23,6 +23,7 @@ uci add_list network.lan.dns='2402:4e00::6666'
 uci set network.lan.delegate='0'
 
 # ---- 旁路网关 IPv6 中继模式 ----
+uci set dhcp.lan.dynamicdhcp='0'
 uci set dhcp.lan.dhcpv6='hybrid'
 uci set dhcp.lan.ra='hybrid'
 uci set dhcp.lan.ndp='relay'

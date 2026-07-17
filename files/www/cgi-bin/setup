@@ -36,9 +36,6 @@ json_get_var skip skip
 # ---- 跳过模式：清除标记 + 自禁用（不改配置）----
 if [ "$skip" = "true" ]; then
     oasisic_clear_firstboot /www/cgi-bin/setup
-    # 恢复 LuCI 顶部菜单（99-custom 首次启动时关掉了）
-    uci set luci.title.show_menu='1'
-    uci commit luci
     # 用 setsid 脱离 uhttpd 进程组，避免 procd 整组 kill 时被误杀
     setsid sh -c 'sleep 2 && /etc/init.d/uhttpd restart' 2>/dev/null &
     echo '{"success":true,"mode":"skip"}'
@@ -144,10 +141,6 @@ uci commit dhcp
 if [ -n "$password" ]; then
     printf '%s\n%s\n' "$password" "$password" | passwd root >/dev/null 2>&1
 fi
-
-# 恢复 LuCI 顶部菜单（99-custom 首次启动时关掉了）
-uci set luci.title.show_menu='1'
-uci commit luci
 
 # 清除首次启动标记 + 自禁用
 oasisic_clear_firstboot /www/cgi-bin/setup

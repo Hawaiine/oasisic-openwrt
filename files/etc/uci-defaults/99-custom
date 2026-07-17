@@ -9,7 +9,6 @@ touch /etc/.oasisic-firstboot
 uci set luci.main.lang='zh-cn'
 uci set luci.main.mediaurlbase='/luci-static/bootstrap'
 uci set luci.title.title='Oasisic OpenWrt'
-uci set luci.title.show_menu='0'
 uci commit luci
 
 # ---- 默认 DHCP 客户端（无静态 IP）----

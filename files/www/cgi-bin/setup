@@ -106,6 +106,12 @@ if [ "$port" -lt 1 ] 2>/dev/null || [ "$port" -gt 65535 ] 2>/dev/null; then
     exit 0
 fi
 
+# ─── 密码强度校验 ────────────────────────
+if [ -n "$password" ] && [ ${#password} -lt 8 ]; then
+    echo '{"success":false,"error":"密码至少需要 8 位字符"}'
+    exit 0
+fi
+
 # 更新网络配置 — 从 DHCP 切换为静态
 uci set network.lan.proto='static'
 uci set network.lan.ipaddr="$lanIp"

@@ -263,15 +263,15 @@ jobs:
       - name: 🐧 提取内核版本
         id: kernel-version
         run: |
-          PATCHVER=$(grep -oP '^KERNEL_PATCHVER\s*:?=\s*\K.*' "${{ env.BUILD_DIR }}/include/kernel-version.mk" 2>/dev/null | head -1 || echo "")
-                    if [ -n "$PATCHVER" ]; then
-                      SUFFIX=$(grep -oP "^LINUX_VERSION-${PATCHVER}\s*=\s*\K.*" "${{ env.BUILD_DIR }}/target/linux/generic/kernel-${PATCHVER}" 2>/dev/null || echo "")
-                      KV="${PATCHVER}${SUFFIX}"
-                    else
-                      KV=$(grep -oP 'CONFIG_LINUX_VERSION_STRING\s*=\s*"\K[^"]*' "${{ env.BUILD_DIR }}/.config" 2>/dev/null || echo "")
-                    fi
-                    echo "kernel_version=${KV:-?}" >> "$GITHUB_OUTPUT"
-                    echo "✅ 内核版本: ${KV:-?}"
+          PATCHVER=$(grep -oP '^KERNEL_PATCHVER:=\s*\K.*' "${{ env.BUILD_DIR }}/target/linux/x86/Makefile" 2>/dev/null | head -1 || echo "")
+          if [ -n "$PATCHVER" ]; then
+            SUFFIX=$(grep -oP "^LINUX_VERSION-${PATCHVER}\s*=\s*\K.*" "${{ env.BUILD_DIR }}/target/linux/generic/kernel-${PATCHVER}" 2>/dev/null || echo "")
+            KV="${PATCHVER}${SUFFIX}"
+          else
+            KV=$(grep -oP 'CONFIG_LINUX_VERSION_STRING\s*=\s*"\K[^"]*' "${{ env.BUILD_DIR }}/.config" 2>/dev/null || echo "")
+          fi
+          echo "kernel_version=${KV:-?}" >> "$GITHUB_OUTPUT"
+          echo "✅ 内核版本: ${KV:-?}"
 
       - name: 📡 提取 Nikki 版本
         id: nikki-version

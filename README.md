@@ -82,7 +82,7 @@
 
 ## 🏗️ 编译流程
 
-### 构建流水线
+### 构建流水线（4 站式多阶段）
 
 ```
 check-upstream
@@ -95,25 +95,26 @@ check-upstream
         ├── 📦 安装依赖
         ├── 💾 恢复三层缓存（ccache + 源码树 + dl）
         ├── ⬇️ 克隆源码（自动重试）
+        ├── 🔑 生成随机 root 密码（SHA-512 + 注释清理 + 写入校验）
         ├── ⚙️ 复制自定义文件 + 版本注入
         ├── ⚙️ 配置 feeds（版本跟踪 + 自动重试）
         ├── ⚙️ gen-config.sh → make defconfig
         ├── ⬇️ make download（自动重试）
         ├── 🏗️ 编译（失败时自动 verbose 重跑）
-        ├── 📊 ccache 统计
+        ├── 📊 ccache 统计（中英双语）
         ├── 🔏 minisign 签名
         ├── 📋 check-firmware.sh 自检
-        └── 📤 上传 Artifact
+        ├── 📤 上传 Artifact → 独立阻断门
               │
               ▼
-        qemu-smoke-test（阻断门）
-              │
-              ├── ❌ QEMU 启动失败 → 终止
-              │
-              └── ✅ LuCI 响应 200 → release job
-                    │
-                    ├── 🚀 发布 GitHub Release（含随机密码）
-                    └── 📢 Discord 通知
+        qemu-smoke-test job（独立阻断门）
+          │
+          ├── ❌ QEMU 启动失败 → 终止
+          │
+          └── ✅ LuCI 响应 200 → release job
+                │
+                ├── 🚀 发布 GitHub Release（含随机密码）
+                └── 📢 Discord 通知
 ```
 
 ### 三层缓存策略
@@ -142,7 +143,7 @@ oasisic-openwrt/
 │       ├── config/
 │       │   ├── network           ← LAN DHCP（首次开机自动获取 IP）
 │       │   ├── firewall          ← 旁路网关全 ACCEPT 规则
-│       │   ├── system            ← hostname / NTP / 时区
+│       │       ├── system            ← hostname / NTP / 时区（use_dhcp 默认关闭）
 │       │   └── dhcp              ← dnsmasq + IPv6 中继
 │       ├── banner                ← OpenWrt 官方默认（base-files 自带）
 │       └── uci-defaults/

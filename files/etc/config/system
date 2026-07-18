@@ -9,6 +9,7 @@ config system
 config timeserver 'ntp'
 	option enabled '1'
 	option enable_server '0'
+	option use_dhcp '0'
 	list server 'ntp.aliyun.com'
 	list server 'ntp.ntsc.ac.cn'
 	list server 'cn.pool.ntp.org'

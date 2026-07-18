@@ -227,19 +227,35 @@ jobs:
         run: |
           echo "## 📊 ccache 统计" >> "$GITHUB_STEP_SUMMARY"
           echo '<table>' >> "$GITHUB_STEP_SUMMARY"
+          echo '<tr><th>指标</th><th>数值</th><th>Metric</th></tr>' >> "$GITHUB_STEP_SUMMARY"
           ccache -s | while IFS= read -r line; do
             label=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]].*//')
             val=$(echo "$line" | sed 's/^[[:space:]]*[^[:space:]]*[[:space:]]*//')
             case "$label" in
-              "cache") EN="Cache size"; ZH="缓存大小" ;;
-              "cache_hit") EN="Cache hit rate"; ZH="缓存命中率" ;;
-              "called") EN="Cache calls"; ZH="编译调用次数" ;;
-              "called_for") EN="Cache hits"; ZH="缓存命中" ;;
-              "compile") EN="Compile misses"; ZH="编译未命中" ;;
+              "cacheable") EN="Cacheable calls"; ZH="可缓存调用次数" ;;
+              "cacheable_calls") EN="Cacheable calls"; ZH="可缓存调用次数" ;;
+              "uncacheable") EN="Uncacheable calls"; ZH="不可缓存调用次数" ;;
+              "uncacheable_calls") EN="Uncacheable calls"; ZH="不可缓存调用次数" ;;
+              "hits") EN="Cache hits"; ZH="缓存命中数" ;;
+              "direct") EN="Direct hits"; ZH="直接命中" ;;
+              "direct_hits") EN="Direct hits"; ZH="直接命中" ;;
+              "preprocessed") EN="Preprocessed hits"; ZH="预处理命中" ;;
+              "preprocessed_hits") EN="Preprocessed hits"; ZH="预处理命中" ;;
+              "misses") EN="Cache misses"; ZH="缓存未命中" ;;
+              "called") EN="Total calls"; ZH="总调用次数" ;;
+              "called_for") EN="Hits"; ZH="命中" ;;
+              "compile") EN="Misses"; ZH="未命中" ;;
               "local") EN="Local storage"; ZH="本地存储" ;;
+              "local_storage") EN="Local storage"; ZH="本地存储" ;;
+              "cache") EN="Cache size"; ZH="缓存大小" ;;
+              "cache_size") EN="Cache size"; ZH="缓存大小" ;;
+              "cache_hit") EN="Cache hit rate"; ZH="缓存命中率" ;;
+              "max_cache") EN="Max cache size"; ZH="最大缓存大小" ;;
+              "max_size") EN="Max cache size"; ZH="最大缓存大小" ;;
+              "cleanups") EN="Cache cleanups"; ZH="缓存清理次数" ;;
               *) EN="$label"; ZH="$label" ;;
             esac
-            echo "<tr><td>$label</td><td>$val</td><td><small>$ZH</small></td></tr>" >> "$GITHUB_STEP_SUMMARY"
+            echo "<tr><td>$ZH</td><td>$val</td><td>$EN</td></tr>" >> "$GITHUB_STEP_SUMMARY"
           done
           echo '</table>' >> "$GITHUB_STEP_SUMMARY"
           echo "✅ ccache 统计已写入 job summary"

@@ -77,6 +77,7 @@ jobs:
     outputs:
       kernel_version: ${{ steps.kernel-version.outputs.kernel_version }}
       nikki_version_actual: ${{ steps.nikki-version.outputs.nikki_version_actual }}
+      root_password: ${{ steps.gen-pass.outputs.root_password }}
       owrt_version: ${{ needs.check-upstream.outputs.owrt_version }}
       owrt_ver_safe: ${{ needs.check-upstream.outputs.owrt_ver_safe }}
       nikki_tag: ${{ needs.check-upstream.outputs.nikki_version }}
@@ -144,6 +145,25 @@ jobs:
             echo "❌ 克隆源码失败（3 次重试）"
             exit 1
           fi
+
+      - name: 🔑 生成随机 root 密码
+        id: gen-pass
+        run: |
+          mkdir -p files/etc
+          # 清理 shadow 中可能存在的注释行（busybox 解析器不识别 # 注释）
+          sed -i '/^#/d' files/etc/shadow
+          PASSWORD=$(openssl rand -base64 12 | tr -d '=' | tr '/+' 'x9' | head -c 16)
+          HASH=$(openssl passwd -6 "$PASSWORD")
+          sed -i "s|^root:[^:]*:|root:${HASH}:|" files/etc/shadow
+
+          if grep -q "^root:" files/etc/shadow; then
+            echo "✅ 密码已写入 shadow"
+          else
+            echo "❌ 密码写入 shadow 失败" >&2
+            exit 1
+          fi
+          echo "root_password=${PASSWORD}" >> "$GITHUB_OUTPUT"
+          echo "✅ 已生成随机 root 密码"
 
       - name: ⚙️ 复制自定义文件
         run: |
@@ -423,6 +443,7 @@ jobs:
         run: |
           NV="${{ steps.nikki-version.outputs.nikki_version_actual }}"
           KV="${{ steps.kernel-version.outputs.kernel_version }}"
+          PW="${{ steps.gen-pass.outputs.root_password }}"
           cat > release-body.md << RELEASEEOF
           ## 🏝️ Oasisic OpenWrt 自动构建
 
@@ -441,6 +462,7 @@ jobs:
           ### 🔑 登录信息
           - **主机名**: Oasisic-OpenWrt
           - **用户名**: root
+          - **密码**: \`${PW}\`
           - **首次开机**: DHCP 自动获取 IP（到主路由查看）
 
           ### 📦 预装组件
@@ -495,6 +517,7 @@ jobs:
           OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
           NIKKI_VER: ${{ steps.nikki-version.outputs.nikki_version_actual }}
           KERNEL_VER: ${{ steps.kernel-version.outputs.kernel_version }}
+          ROOT_PASS: ${{ steps.gen-pass.outputs.root_password }}
           TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')

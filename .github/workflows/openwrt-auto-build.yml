@@ -279,6 +279,80 @@ jobs:
           echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ steps.kernel-version.outputs.kernel_version }}" \
             > "${{ env.LAST_VERSION_FILE }}"
 
+      - name: 🚀 QEMU 烟雾测试
+        run: |
+          set -euo pipefail
+
+          FIRMWARE_GZ="$(find "${{ env.BUILD_DIR }}/bin/targets/x86/64/" -name '*-squashfs-combined-efi.img.gz' -type f 2>/dev/null | head -1)"
+          if [ -z "$FIRMWARE_GZ" ]; then
+            FIRMWARE_GZ="$(find "${{ env.BUILD_DIR }}/bin/targets/x86/64/" -name '*-squashfs-combined.img.gz' -type f 2>/dev/null | head -1)"
+          fi
+          if [ -z "$FIRMWARE_GZ" ]; then
+            echo "⚠️ 未找到固件镜像，跳过 QEMU 测试"
+            exit 0
+          fi
+
+          gunzip -k -f "$FIRMWARE_GZ"
+          IMG="${FIRMWARE_GZ%.gz}"
+          echo "📦 固件: $(basename "$IMG") ($(du -h "$IMG" | cut -f1))"
+
+          sudo apt-get install -y -qq qemu-system-x86-64 ovmf 2>/dev/null || true
+
+          OVMF_CODE=""
+          for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          if [ -z "$OVMF_CODE" ]; then
+            echo "⚠️ 未找到 OVMF，跳过 QEMU 测试"
+            exit 0
+          fi
+
+          BOOT_LOG="/tmp/boot.log"
+          OVMF_VARS="/tmp/ovmf_vars.fd"
+          cp "$(dirname "$OVMF_CODE")/OVMF_VARS_4M.fd" "$OVMF_VARS" 2>/dev/null || \
+            cp "$(dirname "$OVMF_CODE")/OVMF_VARS.fd" "$OVMF_VARS" 2>/dev/null || \
+            touch "$OVMF_VARS"
+
+          timeout 300 qemu-system-x86_64 \
+            -m 256 -machine q35 -nographic \
+            -serial "file:${BOOT_LOG}" \
+            -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+            -drive if=pflash,format=raw,file="$OVMF_VARS" \
+            -drive file="$IMG",format=raw,if=virtio \
+            -netdev user,id=net0,hostfwd=tcp::8080-:80 \
+            -device virtio-net-pci,netdev=net0 \
+            -no-reboot >/dev/null 2>&1 &
+          QEMU_PID=$!
+
+          START_TS=$(date +%s)
+          LUCI_OK=false
+          TIMEOUT=300
+          while [ $(( $(date +%s) - $START_TS )) -lt $TIMEOUT ]; do
+            if grep -qiE '(kernel panic|Oops|BUG:|unable to handle kernel)' "$BOOT_LOG" 2>/dev/null; then
+              echo "❌ 内核异常！"
+              grep -iE '(kernel panic|Oops|BUG:|unable to handle kernel)' "$BOOT_LOG" | tail -5
+              kill $QEMU_PID 2>/dev/null || true
+              exit 1
+            fi
+            if curl -sf -o /dev/null http://127.0.0.1:8080/ 2>/dev/null; then
+              echo "✅ LuCI 首页响应 200"
+              LUCI_OK=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$LUCI_OK" != "true" ]; then
+            echo "❌ 超时: LuCI 未在 ${TIMEOUT}s 内响应"
+            tail -50 "$BOOT_LOG" 2>/dev/null || true
+            kill $QEMU_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "🎉 QEMU 烟雾测试通过"
+          kill $QEMU_PID 2>/dev/null || true
+          rm -f "$IMG" "$BOOT_LOG" "$OVMF_VARS"
+
       - name: 📤 上传固件 Artifact
         uses: actions/upload-artifact@v7
         with:

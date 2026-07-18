@@ -323,13 +323,42 @@ jobs:
           echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ steps.kernel-version.outputs.kernel_version }}" \
             > "${{ env.LAST_VERSION_FILE }}"
 
+      - name: 📤 上传固件 Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          path: |
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums.minisig
+            ${{ env.BUILD_DIR }}/feeds.conf.default
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/config.buildinfo
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/profiles.json
+            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic.manifest
+          retention-days: 30
+
+  # ─── Job 3: QEMU 烟雾测试（阻断门）─────────────────────────────────────
+  qemu-smoke-test:
+    needs: [check-upstream, build]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 下载固件 Artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          path: firmware/
+
       - name: 🚀 QEMU 烟雾测试
         run: |
           set -euo pipefail
 
-          FIRMWARE_GZ="$(find "${{ env.BUILD_DIR }}/bin/targets/x86/64/" -name '*-squashfs-combined-efi.img.gz' -type f 2>/dev/null | head -1)"
+          FIRMWARE_GZ="$(find "firmware/bin/targets/x86/64/" -name '*-squashfs-combined-efi.img.gz' -type f 2>/dev/null | head -1)"
           if [ -z "$FIRMWARE_GZ" ]; then
-            FIRMWARE_GZ="$(find "${{ env.BUILD_DIR }}/bin/targets/x86/64/" -name '*-squashfs-combined.img.gz' -type f 2>/dev/null | head -1)"
+            FIRMWARE_GZ="$(find "firmware/bin/targets/x86/64/" -name '*-squashfs-combined.img.gz' -type f 2>/dev/null | head -1)"
           fi
           if [ -z "$FIRMWARE_GZ" ]; then
             echo "⚠️ 未找到固件镜像，跳过 QEMU 测试"
@@ -433,23 +462,15 @@ jobs:
           rm -f "$IMG" "$BOOT_LOG" "$OVMF_VARS"
 
       - name: 📤 上传固件 Artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
-          path: |
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image.iso
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic-image-efi.iso
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/sha256sums.minisig
-            ${{ env.BUILD_DIR }}/feeds.conf.default
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/config.buildinfo
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/profiles.json
-            ${{ env.BUILD_DIR }}/bin/targets/x86/64/openwrt-x86-64-generic.manifest
-          retention-days: 30
 
-      - name: 📥 下载 Artifact（准备 Release 附件）
+  # ─── Job 4: 发布 Release + 通知 ──────────────────────────────────────
+  release:
+    needs: [check-upstream, build, qemu-smoke-test]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 📥 下载固件 Artifact
         uses: actions/download-artifact@v7
         with:
           name: oasisic-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
@@ -457,9 +478,9 @@ jobs:
 
       - name: 🏷️ 生成 Release body
         run: |
-          NV="${{ steps.nikki-version.outputs.nikki_version_actual }}"
-          KV="${{ steps.kernel-version.outputs.kernel_version }}"
-          PW="${{ steps.gen-pass.outputs.root_password }}"
+          NV="${{ needs.build.outputs.nikki_version_actual }}"
+          KV="${{ needs.build.outputs.kernel_version }}"
+          PW="${{ needs.build.outputs.root_password }}"
           cat > release-body.md << RELEASEEOF
           ## 🏝️ Oasisic OpenWrt 自动构建
 
@@ -531,9 +552,9 @@ jobs:
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           OWRT_VER: ${{ needs.check-upstream.outputs.owrt_version }}
-          NIKKI_VER: ${{ steps.nikki-version.outputs.nikki_version_actual }}
-          KERNEL_VER: ${{ steps.kernel-version.outputs.kernel_version }}
-          ROOT_PASS: ${{ steps.gen-pass.outputs.root_password }}
+          NIKKI_VER: ${{ needs.build.outputs.nikki_version_actual }}
+          KERNEL_VER: ${{ needs.build.outputs.kernel_version }}
+          ROOT_PASS: ${{ needs.build.outputs.root_password }}
           TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')

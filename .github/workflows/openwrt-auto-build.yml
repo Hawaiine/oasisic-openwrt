@@ -461,8 +461,6 @@ jobs:
           kill $QEMU_PID 2>/dev/null || true
           rm -f "$IMG" "$BOOT_LOG" "$OVMF_VARS"
 
-      - name: 📤 上传固件 Artifact
-
   # ─── Job 4: 发布 Release + 通知 ──────────────────────────────────────
   release:
     needs: [check-upstream, build, qemu-smoke-test]

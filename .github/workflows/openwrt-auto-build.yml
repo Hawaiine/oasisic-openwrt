@@ -400,7 +400,7 @@ jobs:
           | 编译时间 | $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S') 北京时间 |
 
           ### 🔑 登录信息
-          - **主机名**: ${{ needs.check-upstream.outputs.owrt_version }}
+          - **主机名**: Oasisic-OpenWrt
           - **用户名**: root
           - **首次开机**: DHCP 自动获取 IP（到主路由查看）
 

@@ -144,7 +144,7 @@ oasisic-openwrt/
 │       │   ├── firewall          ← 旁路网关全 ACCEPT 规则
 │       │   ├── system            ← hostname / NTP / 时区
 │       │   └── dhcp              ← dnsmasq + IPv6 中继
-│       ├── banner                ← OpenWrt 官方 logo + Oasisic 品牌
+│       ├── banner                ← OpenWrt 官方默认（base-files 自带）
 │       └── uci-defaults/
 │           └── 99-custom         ← 首次启动配置脚本
 │

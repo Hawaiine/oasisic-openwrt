@@ -251,16 +251,16 @@ qm start 100
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-16 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
+| [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-18 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
 
 **里程碑 v1.0.0 涵盖：**
 
 | 阶段 | 内容 |
 |------|------|
 | 🔷 一 | 基础系统配置（网络/防火墙/DHCP/NTP/Feeds/包选择/编译优化） |
-| 🔷 二 | 首次启动设置向导（状态机/检测页/CGI 前后端/自禁用） |
-| 🔷 三 | CI/CD 流水线（4 站式/上游检测/QEMU 烟雾测试/minisign/通知） |
-| 🔷 四 | OpenWrt 25.12 APK 适配 + 最终打磨（ucode 修复/CI 修复/清理） |
+| 🔷 二 | 首次启动设置向导（状态机/检测页/CGI 前后端/自禁用/回滚保护/密码强度校验） |
+| 🔷 三 | CI/CD 流水线（4 站式多阶段：check-upstream → build → qemu-smoke-test → release / 上游检测 / QEMU 烟雾测试 / minisign / Discord 通知 / 文档一致性校验 / 中英双语 ccache） |
+| 🔷 四 | 密码安全（CI 随机密码 SHA-512 + 注释清理 + 写入校验 / 设置向导 CGI 密码修改）/ 内核版本正确提取 / 通用多阶段流水线拆分 |
 
 > 后续版本跟随上游 OpenWrt / Nikki tag 自动发布，详见 [Releases](https://github.com/Hawaiine/oasisic-openwrt/releases)。
 

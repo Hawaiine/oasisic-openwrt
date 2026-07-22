@@ -84,7 +84,7 @@
 
 首次启动脚本 `files/etc/uci-defaults/99-custom` 负责设置语言、诊断地址、网络默认值等，执行后自毁。
 
-#### LuCI 语言注册（关键修复）
+#### LuCI 语言注册（关键修复 ✅ 已通过构建 #95 验证）
 
 ```sh
 uci set luci.languages='internal'
@@ -288,6 +288,7 @@ qm start 100
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| [oasisic-25.12.5](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/oasisic-25.12.5) | 2026-07-22 | 🏝️ 自动构建 #95 — OpenWrt 25.12.5 + Nikki 1.26.1 + Kernel 6.12.94（含语言修复 + DNSPod 诊断） |
 | `ef9c13d` | 2026-07-22 | 🐛 修复 LuCI 语言注册（`zh_cn` + `luci.languages` 手动创建）+ 诊断地址改 DNSPod + 清理无效 `luci.title.title` |
 | [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-18 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
 

@@ -67,7 +67,7 @@
 | `files/www/setup.html` | 设置向导页面（混搭光暗主题，781 行） |
 | `files/www/cgi-bin/setup` | CGI 后端，接收 JSON 写 uci 配置 |
 | `files/www/cgi-bin/check-firstboot` | CGI 检测接口 |
-| `files/etc/uci-defaults/99-custom` | 首次启动创建标记 |
+| `files/etc/uci-defaults/99-custom` | 首次启动配置脚本（语言注册/诊断地址/网络预设） |
 | `files/usr/lib/oasisic/firstboot.sh` | 首次启动状态机共享库 |
 
 ### 安全设计

@@ -42,6 +42,8 @@
 | 🧪 **烟雾测试** | QEMU | 固件构建后自动启动验证 LuCI |
 | 🔏 **签名验证** | minisign | 固件完整性签名 + 用户验证指南 |
 | 🧹 **自动清理** | Actions 缓存 | 每 3 天清理失败运行 + 过期缓存 |
+| 🌐 **诊断默认** | DNSPod | 网络诊断默认地址 `119.29.29.29`（国内解析快、稳定） |
+| 🈴 **语言修复** | `zh_cn` 下划线 | 修复 `luci.languages` 在全新固件上不存在的问题，自动注册中文 |
 
 ---
 
@@ -77,6 +79,40 @@
 - 设置完成后 CGI 自禁用（chmod 000）
 - IPv4 格式校验 + 端口范围校验 + 密码一致性校验
 - 跳过模式：只清标记不改配置
+
+### 99-custom 脚本详解
+
+首次启动脚本 `files/etc/uci-defaults/99-custom` 负责设置语言、诊断地址、网络默认值等，执行后自毁。
+
+#### LuCI 语言注册（关键修复）
+
+```sh
+uci set luci.languages='internal'
+uci set luci.languages.zh_cn='简体中文 (Simplified Chinese)'
+uci set luci.main.lang='zh_cn'
+```
+
+**为什么用 `zh_cn`（下划线）？**
+
+- `luci.mk` 的 `LuciTranslation` 宏通过 `$(subst -,\\_,zh-cn)` 生成的就是 `zh_cn`
+- LuCI dispatcher 把 `_` 替换成 `-` 再去匹配翻译文件 `base.zh-cn.lmo`
+- 全新固件上 `luci.languages` 配置段不存在，**必须手动创建**（`uci set luci.languages='internal'`）
+- apk 包自带的 uci-defaults 注册脚本因 [openwrt#16987](https://bugs.openwrt.org/index.php?do=details&task_id=16987) 在 QEMU 环境中不执行
+
+#### 网络诊断默认地址
+
+```sh
+uci set luci.diag.dns='119.29.29.29'
+uci set luci.diag.ping='119.29.29.29'
+uci set luci.diag.route='119.29.29.29'
+```
+
+DNSPod `119.29.29.29` 国内解析快、稳定，替换默认的 Google DNS。
+
+#### 清理项
+
+- 移除 `uci set luci.title.title='Oasisic OpenWrt'`——经查 `openwrt/luci` 全量源码，无任何代码读取此配置项，属于无效定制
+- hostname 由 `files/etc/config/system` 静态写入 `option hostname 'Oasisic-OpenWrt'`，开机直接生效，无需在 99-custom 中重复设置
 
 ---
 
@@ -211,7 +247,7 @@ qm start 100
 | 📦 feeds | 官方 GitHub 镜像，锁定 openwrt-25.12 分支 |
 | 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` |
 | 🧬 包声明 | `gen-config.sh` 显式声明所有包，无隐藏依赖 |
-| 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁 |
+| 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁，含语言注册 + DNSPod 诊断地址 |
 | 🚫 无后门 | 不包含任何第三方源、闭源驱动、遥测脚本 |
 
 ---
@@ -226,6 +262,7 @@ qm start 100
 | Release 失败 `Resource not accessible` | 缺少权限 | 添加 `permissions: contents: write` |
 | 缓存不命中 | key 设计错误 | 用版本号代替 `run_id` |
 | LuCI 无限转圈 | 缺少 ucode base 包 | 确保 `CONFIG_PACKAGE_ucode=y` |
+| LuCI 语言下拉框为空 | `luci.languages` 未注册（openwrt#16987） | 99-custom 中手动创建 `uci set luci.languages='internal'` + `uci set luci.languages.zh_cn='...'` |
 | Feeds 更新失败 | 分支名语法错误 | 25.12 用 `;` 而非 `^` |
 
 ### 编译时间参考
@@ -251,6 +288,7 @@ qm start 100
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| `ef9c13d` | 2026-07-22 | 🐛 修复 LuCI 语言注册（`zh_cn` + `luci.languages` 手动创建）+ 诊断地址改 DNSPod + 清理无效 `luci.title.title` |
 | [v1.0.0](https://github.com/Hawaiine/oasisic-openwrt/releases/tag/v1.0.0) | 2026-07-18 | 🏝️ **里程碑发布** — 四阶段全部完成，项目进入稳定生产阶段 |
 
 **里程碑 v1.0.0 涵盖：**

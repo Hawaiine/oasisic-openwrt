@@ -8,6 +8,15 @@ on:
   schedule:
     - cron: '0 6 * * *'    # 每天 UTC 06:00 / 北京时间 14:00 检测
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: '强制构建（跳过版本比较）'
+        type: boolean
+        default: false
+      nikki_ref:
+        description: 'Nikki ref（tag/branch/sha，空=用 latest tag）'
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -34,7 +43,10 @@ jobs:
       owrt_version: ${{ steps.check.outputs.owrt_version }}
       owrt_ver_safe: ${{ steps.check.outputs.owrt_ver_safe }}
       kernel_version: ${{ steps.check.outputs.kernel_version }}
-      nikki_version: ${{ steps.check.outputs.nikki_version }}
+      nikki_tag: ${{ steps.check.outputs.nikki_tag }}
+      nikki_ref: ${{ steps.check.outputs.nikki_ref }}
+      nikki_sha: ${{ steps.check.outputs.nikki_sha }}
+      nikki_short_sha: ${{ steps.check.outputs.nikki_short_sha }}
     steps:
       - uses: actions/checkout@v7
 
@@ -43,27 +55,70 @@ jobs:
         run: |
           SAVED=$(cat ${{ env.LAST_VERSION_FILE }} 2>/dev/null || echo "none")
 
+          # ── OpenWrt latest tag ──
           OWRT_TAG=$(curl -sL "https://api.github.com/repos/${{ env.OWRT_REPO }}/releases/latest" \
             | jq -r '.tag_name // empty')
-
-          NIKKI_TAG=$(curl -sL "https://api.github.com/repos/${{ env.NIKKI_REPO }}/releases/latest" \
-            | jq -r '.tag_name // empty')
-
-          KERNEL_VER=$(curl -sL "https://www.kernel.org/releases.json" \
-            | jq -r '[.releases[] | select(.moniker == "stable" or .moniker == "longterm") | .version][0] // empty')
-
           echo "owrt_version=$OWRT_TAG" >> "$GITHUB_OUTPUT"
-          echo "kernel_version=$KERNEL_VER" >> "$GITHUB_OUTPUT"
-          echo "nikki_version=$NIKKI_TAG" >> "$GITHUB_OUTPUT"
 
           OWRT_SAFE="${OWRT_TAG#v}"
           echo "owrt_ver_safe=$OWRT_SAFE" >> "$GITHUB_OUTPUT"
 
-          COMPOSITE="${OWRT_TAG}_${NIKKI_TAG}_${KERNEL_VER}"
+          # ── 内核版本（仅展示，不作为 should_build 信号） ──
+          KERNEL_VER=$(curl -sL "https://www.kernel.org/releases.json" \
+            | jq -r '[.releases[] | select(.moniker == "stable" or .moniker == "longterm") | .version][0] // empty')
+          echo "kernel_version=$KERNEL_VER" >> "$GITHUB_OUTPUT"
 
-          if [ "$COMPOSITE" != "$SAVED" ] && [ -n "$OWRT_TAG" ]; then
+          # ── Nikki ref 解析 ──
+          # 优先 workflow_dispatch 输入，否则用 latest release tag
+          INPUT_NIKKI_REF="${{ inputs.nikki_ref }}"
+          if [ -n "$INPUT_NIKKI_REF" ]; then
+            NIKKI_REF="$INPUT_NIKKI_REF"
+          else
+            NIKKI_REF=$(curl -sL "https://api.github.com/repos/${{ env.NIKKI_REPO }}/releases/latest" \
+              | jq -r '.tag_name // empty')
+          fi
+          echo "nikki_ref=$NIKKI_REF" >> "$GITHUB_OUTPUT"
+
+          # 保留 tag 名用于显示
+          NIKKI_TAG=$(curl -sL "https://api.github.com/repos/${{ env.NIKKI_REPO }}/releases/latest" \
+            | jq -r '.tag_name // empty')
+          echo "nikki_tag=$NIKKI_TAG" >> "$GITHUB_OUTPUT"
+
+          # ── 解析 NIKKI_REF 到实际 SHA ──
+          # 优先 GitHub API（/commits/ 始终返回 commit sha，支持 tag/branch/sha）
+          # 回退 git ls-remote（含 ^{} 解除附注 tag 引用）
+          NIKKI_SHA=$(curl -sL "https://api.github.com/repos/${{ env.NIKKI_REPO }}/commits/$NIKKI_REF" \
+            | jq -r '.sha // empty')
+          if [ -z "$NIKKI_SHA" ]; then
+            NIKKI_SHA=$(git ls-remote "https://github.com/${{ env.NIKKI_REPO }}.git" \
+              "$NIKKI_REF^{}" "$NIKKI_REF" 2>/dev/null | head -1 | awk '{print $1}')
+          fi
+          if [ -z "$NIKKI_SHA" ]; then
+            echo "❌ 无法解析 Nikki ref: $NIKKI_REF" >&2
+            exit 1
+          fi
+          NIKKI_SHORT_SHA="${NIKKI_SHA:0:7}"
+          echo "nikki_sha=$NIKKI_SHA" >> "$GITHUB_OUTPUT"
+          echo "nikki_short_sha=$NIKKI_SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "✅ Nikki ref: $NIKKI_REF → SHA: $NIKKI_SHORT_SHA ($NIKKI_SHA)"
+
+          # ── Composite key: 不含 kernel.org ──
+          COMPOSITE="${OWRT_TAG}_nikki-${NIKKI_SHA}"
+
+          # ── should_build 判定 ──
+          FORCE_BUILD="${{ inputs.force_build }}"
+          if [ "$FORCE_BUILD" = "true" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "✅ 强制构建（force_build=true）"
+          elif [ -z "$OWRT_TAG" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️  OpenWrt 版本为空，跳过构建"
+          elif [ "$COMPOSITE" != "$SAVED" ]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             echo "✅ 检测到更新: $COMPOSITE (上次: $SAVED)"
+          elif [ ! -f "${{ env.LAST_VERSION_FILE }}" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "✅ last_build_version 文件缺失，重新构建"
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             echo "⏭️  无更新,跳过构建"
@@ -80,7 +135,10 @@ jobs:
       root_password: ${{ steps.gen-pass.outputs.root_password }}
       owrt_version: ${{ needs.check-upstream.outputs.owrt_version }}
       owrt_ver_safe: ${{ needs.check-upstream.outputs.owrt_ver_safe }}
-      nikki_tag: ${{ needs.check-upstream.outputs.nikki_version }}
+      nikki_tag: ${{ needs.check-upstream.outputs.nikki_tag }}
+      nikki_ref: ${{ needs.check-upstream.outputs.nikki_ref }}
+      nikki_sha: ${{ needs.check-upstream.outputs.nikki_sha }}
+      nikki_short_sha: ${{ needs.check-upstream.outputs.nikki_short_sha }}
     steps:
       - uses: actions/checkout@v7
 
@@ -112,7 +170,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.BUILD_DIR }}
-          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          key: source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
           restore-keys: |
             source-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
 
@@ -122,7 +180,7 @@ jobs:
           path: |
             ${{ env.BUILD_DIR }}/dl
             ${{ env.BUILD_DIR }}/feeds
-          key: dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ hashFiles('scripts/gen-config.sh') }}
+          key: dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-${{ needs.check-upstream.outputs.nikki_sha }}-${{ hashFiles('scripts/gen-config.sh') }}
           restore-keys: |
             dl-openwrt-${{ needs.check-upstream.outputs.owrt_ver_safe }}-
             dl-openwrt-
@@ -177,7 +235,7 @@ jobs:
         run: |
           bash scripts/gen-feeds-conf.sh \
             "${{ needs.check-upstream.outputs.owrt_version }}" \
-            "${{ needs.check-upstream.outputs.nikki_version }}" \
+            "${{ needs.check-upstream.outputs.nikki_sha }}" \
             > "${{ env.BUILD_DIR }}/feeds.conf.default"
           cd "${{ env.BUILD_DIR }}"
           rm -rf feeds 2>/dev/null || true
@@ -276,6 +334,7 @@ jobs:
       - name: 📡 提取 Nikki 版本
         id: nikki-version
         run: |
+          VER=""
           for dir in "${{ env.BUILD_DIR }}/bin/packages/x86_64"/*; do
             APK=$(find "$dir" -name "luci-app-nikki*.apk" 2>/dev/null | head -1)
             IPK=$(find "$dir" -name "luci-app-nikki_*.ipk" 2>/dev/null | head -1)
@@ -287,8 +346,10 @@ jobs:
               break
             fi
           done
-          echo "nikki_version_actual=${VER:-${{ needs.check-upstream.outputs.nikki_version }}}" >> "$GITHUB_OUTPUT"
-          echo "✅ Nikki 版本: ${VER:-${{ needs.check-upstream.outputs.nikki_version }}}"
+          # 若提取不到，回退到 nikki_ref
+          FALLBACK="${{ needs.check-upstream.outputs.nikki_ref }}"
+          echo "nikki_version_actual=${VER:-$FALLBACK}" >> "$GITHUB_OUTPUT"
+          echo "✅ Nikki 版本: ${VER:-$FALLBACK}"
 
       - name: 🧹 清理中间产物
         run: |
@@ -323,7 +384,7 @@ jobs:
 
       - name: 💾 保存版本标识
         run: |
-          echo "${{ needs.check-upstream.outputs.owrt_version }}_${{ needs.check-upstream.outputs.nikki_version }}_${{ steps.kernel-version.outputs.kernel_version }}" \
+          echo "${{ needs.check-upstream.outputs.owrt_version }}_nikki-${{ needs.check-upstream.outputs.nikki_sha }}" \
             > "${{ env.LAST_VERSION_FILE }}"
 
       - name: 📤 上传固件 Artifact
@@ -482,6 +543,9 @@ jobs:
           NV="${{ needs.build.outputs.nikki_version_actual }}"
           KV="${{ needs.build.outputs.kernel_version }}"
           PW="${{ needs.build.outputs.root_password }}"
+          NIKKI_REF="${{ needs.build.outputs.nikki_ref }}"
+          NIKKI_SHA="${{ needs.build.outputs.nikki_sha }}"
+          NIKKI_SHORT="${NIKKI_SHA:0:7}"
           cat > release-body.md << RELEASEEOF
           ## 🏝️ Oasisic OpenWrt 自动构建
 
@@ -489,6 +553,7 @@ jobs:
           |----|-----|
           | OpenWrt 版本 | ${{ needs.check-upstream.outputs.owrt_version }} |
           | Nikki 版本 | ${NV} |
+          | Nikki ref | ${NIKKI_REF}（${NIKKI_SHORT}） |
           RELEASEEOF
           if [ -n "$KV" ] && [ "$KV" != "?" ]; then
             echo "| Linux 内核 | ${KV} |" >> release-body.md
@@ -531,14 +596,15 @@ jobs:
         uses: softprops/action-gh-release@v3
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
-          name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          tag_name: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}-nikki-${{ needs.build.outputs.nikki_short_sha }}
+          name: 🏝️ Oasisic OpenWrt ${{ needs.check-upstream.outputs.owrt_ver_safe }} (nikki-${{ needs.build.outputs.nikki_short_sha }})
           fail_on_unmatched_files: false
           make_latest: true
           generate_release_notes: false
           body_path: release-body.md
           files: |
             release-artifacts/bin/targets/x86/64/sha256sums
+            release-artifacts/bin/targets/x86/64/sha256sums.minisig
             release-artifacts/feeds.conf.default
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
             release-artifacts/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined.img.gz
@@ -556,8 +622,8 @@ jobs:
           NIKKI_VER: ${{ needs.build.outputs.nikki_version_actual }}
           KERNEL_VER: ${{ needs.build.outputs.kernel_version }}
           ROOT_PASS: ${{ needs.build.outputs.root_password }}
-          TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}
+          TAG: oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}-nikki-${{ needs.build.outputs.nikki_short_sha }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/oasisic-${{ needs.check-upstream.outputs.owrt_ver_safe }}-nikki-${{ needs.build.outputs.nikki_short_sha }}
           BUILD_TIME: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
         run: python3 scripts/notify-discord.py
 
@@ -566,3 +632,31 @@ jobs:
         run: |
           rm -f release-body.md
           rm -rf release-artifacts
+
+  # ─── Job 5: 回写 last_build_version（持久化） ──────────────────────────
+  persist-last-build:
+    needs: [check-upstream, build, qemu-smoke-test, release]
+    if: needs.check-upstream.outputs.should_build == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 需要 push 权限，用 github.token
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🖊️ 回写 last_build_version
+        run: |
+          COMPOSITE="${{ needs.check-upstream.outputs.owrt_version }}_nikki-${{ needs.check-upstream.outputs.nikki_sha }}"
+          echo "$COMPOSITE" > "${{ env.LAST_VERSION_FILE }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.LAST_VERSION_FILE }}"
+          if git diff --cached --quiet; then
+            echo "⏭️  last_build_version 无变化，跳过提交"
+          else
+            git commit -m "chore: 更新 last_build_version [skip ci]
+
+            Composite: $COMPOSITE"
+            git push
+            echo "✅ last_build_version 已回写至仓库"
+          fi

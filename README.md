@@ -19,7 +19,7 @@
 |---|---|
 | 🏝️ **项目** | **Oasisic OpenWrt** |
 | 📡 **流程** | 检测上游 → 全量编译 → Release |
-| 🎯 **触发源** | OpenWrt / Nikki |
+| 🎯 **触发源** | OpenWrt Tag + Nikki 引用（Tag / 分支 / Commit） |
 | ⏱ **耗时** | ~77min · 增量 ~30min（三层缓存） |
 | 📦 **产物** | 固件 · sha256sums · feeds.conf |
 
@@ -30,14 +30,14 @@
 | 类别 | 特性 | 说明 |
 |------|------|------|
 | 🏗️ **编译方式** | 全量 SDK | 从源码编译全部组件，Nikki 从 feeds 源码集成 |
-| 🔄 **自动触发** | 2 源检测 | OpenWrt / Nikki 自动检测新 tag |
+| 🔄 **自动触发** | 2 源检测 | OpenWrt Tag + Nikki 引用（Tag / 分支 / Commit） |
 | 🛡️ **代理** | Nikki (mihomo) | 自动检测最新版，旁路网关模式 |
 | 🖥️ **PVE 集成** | QEMU Guest Agent | virtio 全系驱动 (net/blk/scsi/rng/serial) |
 | 🏠 **网络预设** | DHCP 客户端 | 首次开机自动获取 IP，无硬编码 IP |
 | 🕐 **时区** | 北京时间 CST-8 | 日志、cron 全 UTC+8 |
 | 🧹 **纯净安全** | 官方源检查 | 仅官方 feeds + Nikki，GitHub 镜像锁定分支 |
 | 🔐 **ucode** | LuCI 基础依赖 | 修复 LuCI CGI 403 |
-| 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，国内连通性优化 |
+| 📦 **Feeds** | GitHub 镜像 | 锁定 openwrt-25.12 分支，Nikki 引用支持 Tag/分支/Commit |
 | 🧭 **设置向导** | 首次启动 | 纯 HTML/CSS/JS 向导，零外部依赖 |
 | 🧪 **烟雾测试** | QEMU | 固件构建后自动启动验证 LuCI |
 | 🔏 **签名验证** | minisign | 固件完整性签名 + 用户验证指南 |
@@ -94,7 +94,7 @@ uci set luci.main.lang='zh_cn'
 
 **为什么用 `zh_cn`（下划线）？**
 
-- `luci.mk` 的 `LuciTranslation` 宏通过 `$(subst -,\\_,zh-cn)` 生成的就是 `zh_cn`
+- `luci.mk` 的 `LuciTranslation` 宏通过 `$(subst -,\\\_,zh-cn)` 生成的就是 `zh_cn`
 - LuCI dispatcher 把 `_` 替换成 `-` 再去匹配翻译文件 `base.zh-cn.lmo`
 - 全新固件上 `luci.languages` 配置段不存在，**必须手动创建**（`uci set luci.languages='internal'`）
 - apk 包自带的 uci-defaults 注册脚本因 [openwrt#16987](https://bugs.openwrt.org/index.php?do=details&task_id=16987) 在 QEMU 环境中不执行
@@ -118,7 +118,7 @@ DNSPod `119.29.29.29` 国内解析快、稳定，替换默认的 Google DNS。
 
 ## 🏗️ 编译流程
 
-### 构建流水线（4 站式多阶段）
+### 构建流水线（5 站式多阶段）
 
 ```
 check-upstream
@@ -140,6 +140,7 @@ check-upstream
         ├── 📊 ccache 统计（中英双语）
         ├── 🔏 minisign 签名
         ├── 📋 check-firmware.sh 自检
+        ├── 💾 保存版本标识
         ├── 📤 上传 Artifact → 独立阻断门
               │
               ▼
@@ -150,7 +151,8 @@ check-upstream
           └── ✅ LuCI 响应 200 → release job
                 │
                 ├── 🚀 发布 GitHub Release（含随机密码）
-                └── 📢 Discord 通知
+                ├── 📢 Discord 通知
+                └── 🖊️ persist-last-build job（回写版本标识）
 ```
 
 ### 三层缓存策略
@@ -159,7 +161,7 @@ check-upstream
 |------|----------|----------|
 | 🔧 ccache | `/tmp/.ccache` | `ccache-openwrt-{ver}-{config_hash}` |
 | 📦 源码树 | `openwrt/` | `source-openwrt-{ver}-{config_hash}` |
-| 📥 dl 包 | `openwrt/dl/` + `feeds/` | `dl-openwrt-{ver}-{config_hash}` |
+| 📥 dl 包 | `openwrt/dl/` + `feeds/` | `dl-openwrt-{ver}-{nikki_sha}-{config_hash}` |
 
 ---
 
@@ -181,7 +183,7 @@ oasisic-openwrt/
 │       │   ├── firewall          ← 旁路网关全 ACCEPT 规则
 │       │       ├── system            ← hostname / NTP / 时区（use_dhcp 默认关闭）
 │       │   └── dhcp              ← dnsmasq + IPv6 中继
-│       ├── banner                ← OpenWrt 官方默认（base-files 自带）
+│       ├── banner                ← OpenWrt 官方默认
 │       └── uci-defaults/
 │           └── 99-custom         ← 首次启动配置脚本
 │
@@ -192,7 +194,7 @@ oasisic-openwrt/
 │   └── notify-discord.py         ← Discord 通知
 │
 ├── feeds.conf                    ← 官方 GitHub 镜像 + 分支锁定
-├── last_build_version            ← 上次构建的版本标识
+├── last_build_version            ← 上次构建的版本标识（成功构建后由 CI 回写，受版本控制）
 └── README.md                     ← 本文档
 ```
 
@@ -207,16 +209,79 @@ oasisic-openwrt/
 | Secret | 用途 |
 |--------|------|
 | `DISCORD_BOT_TOKEN` | Discord 通知机器人 Token |
+| `MINISIGN_SECRET_KEY` | minisign 签名私钥（十六进制） |
+| `MINISIGN_KEY_ID` | minisign 密钥 ID（十六进制，8 字节） |
+| `MINISIGN_PASSWORD` | minisign 私钥密码 |
 
 ### 3️⃣ 推送 → 自动构建
 
 ```bash
-git add -A
+git add .github/workflows/ scripts/ feeds.conf .gitignore LICENSE README.md
 git commit -m "✨ init: 初始化自定义配置"
 git push origin main
 ```
 
 GitHub Actions 每天北京时间 14:00 自动检测上游。也可手动触发。
+
+### 手动构建（workflow_dispatch）
+
+#### 用途
+
+手动构建适用于以下场景：
+- 需要立即验证某个 Nikki 分支或特定提交的固件，不等待定时检测
+- 定时任务默认跟随 Nikki 最新正式版 Release Tag，仅有新 Commit 但未发布 Tag 时不会自动触发
+
+手动构建与定时任务并行存在，不是二选一的关系。
+
+#### 参数说明
+
+| 参数 | 类型 | 默认值 | 含义 | 填写示例 |
+|------|------|--------|------|---------|
+| `force_build` | 布尔 | `false` | 是否跳过版本比对、强制进入完整编译 | `true` / `false` |
+| `nikki_ref` | 字符串 | 空 | Nikki 代码引用。留空表示使用最新正式版 Tag；可填写 Tag 名、分支名、完整或短 Commit SHA | 见下文 |
+
+#### nikki_ref 填写规范
+
+- **留空**：使用 Nikki 仓库最新 Release Tag（例如 `v1.26.1`）
+- **Tag 名**：例如 `v1.26.1`
+- **分支名**：例如 `main`（跟踪该分支当前最新提交）
+- **Commit SHA**：支持短 SHA 或完整 40 位 SHA，例如 `f06b6b44`
+
+说明：界面上可填写短 SHA；工作流会自动解析为完整 40 位 SHA 后写入 feeds，保证可复现性。
+
+#### 操作步骤
+
+1. 打开仓库 [Actions 页面](https://github.com/Hawaiine/oasisic-openwrt/actions)
+2. 在左侧工作流列表中选择 **openwrt-auto-build**
+3. 点击 **Run workflow** 下拉按钮
+4. 在 **force_build** 下拉菜单中选择是否强制构建（需要无视“版本未变化”判断时启用）
+5. 在 **nikki_ref** 文本框中按上述规范填写（或留空使用默认 Tag）
+6. 点击绿色的 **Run workflow** 确认运行
+7. 等待流水线依次执行：check-upstream → build → qemu-smoke-test → release → persist-last-build
+8. 构建完成后，在仓库 [Releases 页面](https://github.com/Hawaiine/oasisic-openwrt/releases) 查看产物
+9. Release 标签格式：`oasisic-{OpenWrt版本}-nikki-{短SHA}`（例如 `oasisic-25.12.5-nikki-f06b6b4`）
+10. 首次成功构建后，仓库中会自动新增/更新 `last_build_version` 文件。若 persis-last-build 步骤失败，版本去重机制可能失效（请检查分支保护规则是否允许 `GITHUB_TOKEN` 推送）
+
+#### 推荐示例
+
+**示例 A：立即构建包含 Nikki 某修复提交的固件**
+
+- `force_build`：`true`
+- `nikki_ref`：`f06b6b44`
+
+说明：该提交对应「大文件保存乱码」等修复。工作流会自动解析为完整 SHA 后写入 feeds，确保引用确定性。
+
+**示例 B：跟踪 Nikki 主分支最新代码**
+
+- `force_build`：`true`
+- `nikki_ref`：`main`
+
+说明：结果随 `main` 分支移动，可复现性弱于钉死 SHA。
+
+**示例 C：与定时任务相同策略（仅手动重跑）**
+
+- `force_build`：按需（不想等下次定时时启用）
+- `nikki_ref`：留空
 
 ### 4️⃣ PVE 导入
 
@@ -245,7 +310,7 @@ qm start 100
 |------|------|
 | 📡 源码源 | 仅 `github.com/openwrt/openwrt` 官方库 |
 | 📦 feeds | 官方 GitHub 镜像，锁定 openwrt-25.12 分支 |
-| 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` |
+| 🔐 Nikki | `github.com/nikkinikki-org/OpenWrt-nikki` — 默认最新正式版 Tag，手动可指定分支或 Commit |
 | 🧬 包声明 | `gen-config.sh` 显式声明所有包，无隐藏依赖 |
 | 🧹 首次启动 | `uci-defaults/99-custom` 执行后自毁，含语言注册 + DNSPod 诊断地址 |
 | 🚫 无后门 | 不包含任何第三方源、闭源驱动、遥测脚本 |
@@ -264,6 +329,7 @@ qm start 100
 | LuCI 无限转圈 | 缺少 ucode base 包 | 确保 `CONFIG_PACKAGE_ucode=y` |
 | LuCI 语言下拉框为空 | `luci.languages` 未注册（openwrt#16987） | 99-custom 中手动创建 `uci set luci.languages='internal'` + `uci set luci.languages.zh_cn='...'` |
 | Feeds 更新失败 | 分支名语法错误 | 25.12 用 `;` 而非 `^` |
+| `persist-last-build` 失败（403） | 分支保护禁止 `GITHUB_TOKEN` 推送 | 检查分支保护规则，允许 `GITHUB_TOKEN` 写入 |
 
 ### 编译时间参考
 
@@ -277,8 +343,8 @@ qm start 100
 
 | 项目 | 说明 |
 |------|------|
-| 🏝️ [Oasisic-Icons](https://github.com/Hawaiine/Oasisic-Icons) | 代理图标库 (427 图标) |
-| 🛡️ [mihomo-rules](https://github.com/Hawaiine/mihomo-rules) | mihomo 规则集 (105 品牌) |
+| 🏝️ [Oasisic-Icons](https://github.com/Hawaiine/Oasisic-Icons) | 代理图标库 |
+| 🛡️ [mihomo-rules](https://github.com/Hawaiine/mihomo-rules) | mihomo 规则集 |
 | 📺 [iptv-sources](https://github.com/Hawaiine/iptv-sources) | IPTV 直播源聚合 |
 | 🎬 [moviepilot-category](https://github.com/Hawaiine/moviepilot-category) | MoviePilot 二级分类策略 |
 
@@ -301,7 +367,7 @@ qm start 100
 | 🔷 三 | CI/CD 流水线（4 站式多阶段：check-upstream → build → qemu-smoke-test → release / 上游检测 / QEMU 烟雾测试 / minisign / Discord 通知 / 文档一致性校验 / 中英双语 ccache） |
 | 🔷 四 | 密码安全（CI 随机密码 SHA-512 + 注释清理 + 写入校验 / 设置向导 CGI 密码修改）/ 内核版本正确提取 / 通用多阶段流水线拆分 |
 
-> 后续版本跟随上游 OpenWrt / Nikki tag 自动发布，详见 [Releases](https://github.com/Hawaiine/oasisic-openwrt/releases)。
+> 后续版本跟随上游 OpenWrt / Nikki 自动发布，详见 [Releases](https://github.com/Hawaiine/oasisic-openwrt/releases)。
 
 ---
 
